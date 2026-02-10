@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <NFSe xmlns="http://www.sped.fazenda.gov.br/nfse" versao="1.00">
-<infNFSe Id="NFS35060031249142284000140000000002249326010515310927">
+<infNFSe Id="NFS35060031249142284000140000000002249926010515311259">
 <xLocEmi>BAURU</xLocEmi>
 <xLocPrestacao>Bauru</xLocPrestacao>
-<nNFSe>22493</nNFSe>
+<nNFSe>22499</nNFSe>
 <cLocIncid>3506003</cLocIncid>
 <xLocIncid>Bauru</xLocIncid>
 <xTribNac>Agenciamento, corretagem ou intermediação de bens móveis ou imóveis, não abrangidos em outros itens ou subitens, por quaisquer meios.</xTribNac>
@@ -11,8 +11,8 @@
 <ambGer>1</ambGer>
 <tpEmis>2</tpEmis>
 <cStat>100</cStat>
-<dhProc>2026-01-27T16:39:56-03:00</dhProc>
-<nDFSe>51531092</nDFSe>
+<dhProc>2026-01-27T16:41:33-03:00</dhProc>
+<nDFSe>51531125</nDFSe>
 <emit>
 <CNPJ>49142284000140</CNPJ>
 <IM>11077</IM>
@@ -29,18 +29,19 @@
 <email>contabilidade@jrassessoria.com.br</email>
 </emit>
 <valores>
-<vBC>84.00</vBC>
+<vBC>128.07</vBC>
 <pAliqAplic>2.00</pAliqAplic>
-<vISSQN>1.68</vISSQN>
-<vLiq>84.00</vLiq>
+<vISSQN>2.56</vISSQN>
+<vTotalRet>2.56</vTotalRet>
+<vLiq>125.51</vLiq>
 </valores>
 <DPS versao="1.00">
-<infDPS Id="DPS350600324914228400014000002000000001013560">
+<infDPS Id="DPS350600324914228400014000002000000001013566">
 <tpAmb>1</tpAmb>
-<dhEmi>2026-01-27T16:39:56-03:00</dhEmi>
+<dhEmi>2026-01-27T16:41:33-03:00</dhEmi>
 <verAplic>SilTecnologia_v1.00</verAplic>
 <serie>00002</serie>
-<nDPS>1013560</nDPS>
+<nDPS>1013566</nDPS>
 <dCompet>2026-01-01</dCompet>
 <tpEmit>1</tpEmit>
 <cLocEmi>3506003</cLocEmi>
@@ -56,16 +57,16 @@
 </regTrib>
 </prest>
 <toma>
-<CPF>21972164813</CPF>
-<xNome>Carina Hadba Guimaraes</xNome>
+<CNPJ>52315678000167</CNPJ>
+<xNome>Residec Construtora e Incorporadora LTDA</xNome>
 <end>
 <endNac>
 <cMun>3506003</cMun>
-<CEP>17018110</CEP>
+<CEP>17011137</CEP>
 </endNac>
-<xLgr>Pelegrino Constanzo</xLgr>
+<xLgr>Rua Julio de Mesquita Filho</xLgr>
 <nro>1</nro>
-<xBairro>Samambaia Parque Res</xBairro>
+<xBairro>Jardim Panorama</xBairro>
 </end>
 </toma>
 <serv>
@@ -74,25 +75,25 @@
 </locPrest>
 <cServ>
 <cTribNac>100501</cTribNac>
-<xDescServ>Administracao do imovel Condominio Edificio Prime Square, Getulio Vargas 22-25 Apto: Sl 1402 T.I</xDescServ>
-<cNBS>110011290</cNBS>
+<xDescServ>Administracao do imovel Condominio Premiatto, Henrique Savi 3-62 Apto: 44 B Vg. 10 A/B (dupla)</xDescServ>
+<cNBS>110011100</cNBS>
 </cServ>
 </serv>
 <valores>
 <vServPrest>
-<vServ>84.00</vServ>
+<vServ>128.07</vServ>
 </vServPrest>
 <trib>
 <tribMun>
 <tribISSQN>1</tribISSQN>
-<tpRetISSQN>1</tpRetISSQN>
+<tpRetISSQN>2</tpRetISSQN>
 </tribMun>
 <tribFed/>
 <totTrib>
 <vTotTrib>
 <vTotTribFed>0.00</vTotTribFed>
 <vTotTribEst>0.00</vTotTribEst>
-<vTotTribMun>1.68</vTotTribMun>
+<vTotTribMun>2.56</vTotTribMun>
 </vTotTrib>
 </totTrib>
 </trib>

@@ -40,14 +40,13 @@ print("Voce tem 40 segundos.")
 sleep(40)
 
 # =====================
-# ESPERAR DOWNLOAD REAL
+# AGUARDAR DOWNLOAD
 # =====================
 def aguardar_xml_novo(pasta, timeout=40):
     fim = time.time() + timeout
     while time.time() < fim:
         arquivos = os.listdir(pasta)
 
-        # enquanto estiver baixando
         if any(a.endswith(".crdownload") for a in arquivos):
             sleep(0.5)
             continue
@@ -65,29 +64,35 @@ def aguardar_xml_novo(pasta, timeout=40):
     raise TimeoutError("Download nao finalizou")
 
 # =====================
-# FECHAR MODAL (CORRETO)
+# FECHAR MODAL
 # =====================
 def fechar_modal():
     try:
-        # clicar no X
-        botao = driver.find_element(By.XPATH, "//button[contains(@class,'close')]")
-        driver.execute_script("arguments[0].click();", botao)
+        # força o fechamento pelo próprio bootstrap/jsf
+        driver.execute_script("""
+            try{
+                $('#modalboxexportarnotas').modal('hide');
+            }catch(e){}
 
-        # ESPERA REAL: overlay desaparecer
-        WebDriverWait(driver, 30).until_not(
-            EC.presence_of_element_located(
-                (By.XPATH, "//div[contains(@class,'modal-backdrop') or contains(@class,'ui-widget-overlay')]")
-            )
+            try{
+                $('.modal').modal('hide');
+            }catch(e){}
+
+            try{
+                $('.modal-backdrop').remove();
+            }catch(e){}
+
+            try{
+                $('.ui-widget-overlay').remove();
+            }catch(e){}
+        """)
+
+        # espera desaparecer completamente
+        WebDriverWait(driver, 20).until(
+            EC.invisibility_of_element_located((By.ID, "modalboxexportarnotas"))
         )
 
-        # também aguarda modal sumir
-        WebDriverWait(driver, 30).until_not(
-            EC.presence_of_element_located(
-                (By.ID, "modalboxexportarnotas")
-            )
-        )
-
-        sleep(0.5)
+        sleep(0.8)
 
     except:
         pass
@@ -132,88 +137,50 @@ def organizar_xml_por_pasta(caminho_xml):
         return caminho_xml
 
 # =====================
-# PAGINACAO REAL
-# =====================
-def ir_para_proxima_pagina():
-    try:
-        pagina_atual = driver.find_element(By.NAME, "gridListaPage").get_attribute("value")
-
-        botao = driver.find_element(By.XPATH, "//span[normalize-space(text())='»']")
-        driver.execute_script("arguments[0].click();", botao)
-
-        wait.until(
-            lambda d: d.find_element(By.NAME, "gridListaPage").get_attribute("value") != pagina_atual
-        )
-
-        sleep(1)
-        return True
-
-    except:
-        return False
-
-# =====================
 # LOOP PRINCIPAL
 # =====================
-pagina = 1
+checkboxes = driver.find_elements(By.NAME, "gridListaCheck")
+print(f"Notas encontradas na pagina: {len(checkboxes)}")
 
-while True:
-    print(f"\nProcessando pagina {pagina}")
+for checkbox in checkboxes:
+    try:
+        driver.execute_script("arguments[0].scrollIntoView({block:'center'});", checkbox)
+        sleep(0.3)
 
-    checkboxes = driver.find_elements(By.NAME, "gridListaCheck")
-    print(f"Notas encontradas na pagina: {len(checkboxes)}")
+        if not checkbox.is_selected():
+            checkbox.click()
 
-    for checkbox in checkboxes:
-        try:
-            driver.execute_script("arguments[0].scrollIntoView({block:'center'});", checkbox)
-            sleep(0.3)
-
-            if not checkbox.is_selected():
-                checkbox.click()
-
-            # abrir exportacao xml
-            botao_xml = wait.until(
-                EC.element_to_be_clickable(
-                    (By.XPATH, "//span[contains(@class,'fa-file-code-o')]/parent::*")
-                )
+        botao_xml = wait.until(
+            EC.element_to_be_clickable(
+                (By.XPATH, "//span[contains(@class,'fa-file-code-o')]/parent::*")
             )
-            botao_xml.click()
+        )
+        botao_xml.click()
 
-            # esperar modal
-            modal = wait.until(
-                EC.visibility_of_element_located((By.ID, "modalboxexportarnotas"))
-            )
+        modal = wait.until(
+            EC.visibility_of_element_located((By.ID, "modalboxexportarnotas"))
+        )
 
-            # selecionar NF Nacional
-            select = Select(modal.find_element(By.TAG_NAME, "select"))
-            select.select_by_visible_text("NF Nacional")
-            sleep(0.4)
+        select = Select(modal.find_element(By.TAG_NAME, "select"))
+        select.select_by_visible_text("NF Nacional")
+        sleep(0.4)
 
-            # visualizar XML
-            modal.find_element(By.XPATH, ".//button[contains(.,'Visualizar')]").click()
+        modal.find_element(By.XPATH, ".//button[contains(.,'Visualizar')]").click()
 
-            # aguardar download
-            xml = aguardar_xml_novo(DOWNLOAD_DIR)
-            organizar_xml_por_pasta(xml)
+        xml = aguardar_xml_novo(DOWNLOAD_DIR)
+        organizar_xml_por_pasta(xml)
 
-            # FECHAR MODAL CORRETAMENTE
-            fechar_modal()
+        fechar_modal()
 
-            # desmarcar
-            if checkbox.is_selected():
-                checkbox.click()
+        if checkbox.is_selected():
+            checkbox.click()
 
-            sleep(0.4)
+        sleep(0.4)
 
-        except Exception as e:
-            print("Erro:", e)
-            continue
+    except Exception as e:
+        print("Erro:", e)
+        continue
 
-    if not ir_para_proxima_pagina():
-        print("Nao ha mais paginas. Finalizando.")
-        break
-
-    pagina += 1
-
-print("Processo finalizado com sucesso.")
+print("Processo finalizado.")
 sleep(3)
 driver.quit()

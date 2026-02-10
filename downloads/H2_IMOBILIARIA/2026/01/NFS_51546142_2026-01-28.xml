@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <NFSe xmlns="http://www.sped.fazenda.gov.br/nfse" versao="1.00">
-<infNFSe Id="NFS35060031249142284000140000000002249326010515310927">
+<infNFSe Id="NFS35060031249142284000140000000002250026010515461425">
 <xLocEmi>BAURU</xLocEmi>
 <xLocPrestacao>Bauru</xLocPrestacao>
-<nNFSe>22493</nNFSe>
+<nNFSe>22500</nNFSe>
 <cLocIncid>3506003</cLocIncid>
 <xLocIncid>Bauru</xLocIncid>
 <xTribNac>Agenciamento, corretagem ou intermediação de bens móveis ou imóveis, não abrangidos em outros itens ou subitens, por quaisquer meios.</xTribNac>
@@ -11,8 +11,8 @@
 <ambGer>1</ambGer>
 <tpEmis>2</tpEmis>
 <cStat>100</cStat>
-<dhProc>2026-01-27T16:39:56-03:00</dhProc>
-<nDFSe>51531092</nDFSe>
+<dhProc>2026-01-28T15:33:36-03:00</dhProc>
+<nDFSe>51546142</nDFSe>
 <emit>
 <CNPJ>49142284000140</CNPJ>
 <IM>11077</IM>
@@ -29,18 +29,18 @@
 <email>contabilidade@jrassessoria.com.br</email>
 </emit>
 <valores>
-<vBC>84.00</vBC>
+<vBC>59.50</vBC>
 <pAliqAplic>2.00</pAliqAplic>
-<vISSQN>1.68</vISSQN>
-<vLiq>84.00</vLiq>
+<vISSQN>1.19</vISSQN>
+<vLiq>59.50</vLiq>
 </valores>
 <DPS versao="1.00">
-<infDPS Id="DPS350600324914228400014000002000000001013560">
+<infDPS Id="DPS350600324914228400014000002000000001013567">
 <tpAmb>1</tpAmb>
-<dhEmi>2026-01-27T16:39:56-03:00</dhEmi>
+<dhEmi>2026-01-28T15:33:36-03:00</dhEmi>
 <verAplic>SilTecnologia_v1.00</verAplic>
 <serie>00002</serie>
-<nDPS>1013560</nDPS>
+<nDPS>1013567</nDPS>
 <dCompet>2026-01-01</dCompet>
 <tpEmit>1</tpEmit>
 <cLocEmi>3506003</cLocEmi>
@@ -56,16 +56,16 @@
 </regTrib>
 </prest>
 <toma>
-<CPF>21972164813</CPF>
-<xNome>Carina Hadba Guimaraes</xNome>
+<CPF>03794288815</CPF>
+<xNome>Roberto Vicente Calheiros</xNome>
 <end>
 <endNac>
 <cMun>3506003</cMun>
-<CEP>17018110</CEP>
+<CEP>17040460</CEP>
 </endNac>
-<xLgr>Pelegrino Constanzo</xLgr>
+<xLgr>Jamil Gebara</xLgr>
 <nro>1</nro>
-<xBairro>Samambaia Parque Res</xBairro>
+<xBairro>Jd. America</xBairro>
 </end>
 </toma>
 <serv>
@@ -74,13 +74,13 @@
 </locPrest>
 <cServ>
 <cTribNac>100501</cTribNac>
-<xDescServ>Administracao do imovel Condominio Edificio Prime Square, Getulio Vargas 22-25 Apto: Sl 1402 T.I</xDescServ>
+<xDescServ>Administracao do imovel Condominio Centro Empresarial Americas, Nacoes Unidas 17-17 Sala 208</xDescServ>
 <cNBS>110011290</cNBS>
 </cServ>
 </serv>
 <valores>
 <vServPrest>
-<vServ>84.00</vServ>
+<vServ>59.50</vServ>
 </vServPrest>
 <trib>
 <tribMun>
@@ -92,7 +92,7 @@
 <vTotTrib>
 <vTotTribFed>0.00</vTotTribFed>
 <vTotTribEst>0.00</vTotTribEst>
-<vTotTribMun>1.68</vTotTribMun>
+<vTotTribMun>1.19</vTotTribMun>
 </vTotTrib>
 </totTrib>
 </trib>
