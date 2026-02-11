@@ -10,7 +10,7 @@ from selenium.common.exceptions import (
     WebDriverException,
 )
 from time import sleep
-import os, time, re, csv
+import os, time, re, csv, tempfile
 from datetime import datetime
 import xml.etree.ElementTree as ET
 import shutil
@@ -38,7 +38,14 @@ EMPRESA_PASTA_FORCADA = ""
 # =====================
 options = Options()
 options.add_argument("--start-maximized")
-options.add_argument(r"--user-data-dir=C:\ChromeRobotProfile")
+
+# Perfil exclusivo com fallback cross-platform.
+DEFAULT_PROFILE_DIR = (
+    r"C:\ChromeRobotProfile" if os.name == "nt"
+    else os.path.join(tempfile.gettempdir(), "ChromeRobotProfile")
+)
+CHROME_PROFILE_DIR = os.environ.get("CHROME_PROFILE_DIR", DEFAULT_PROFILE_DIR)
+options.add_argument(f"--user-data-dir={CHROME_PROFILE_DIR}")
 
 prefs = {
     "download.default_directory": TEMP_DOWNLOAD_DIR,  # <<< importante
@@ -53,8 +60,9 @@ wait = WebDriverWait(driver, 30)
 
 print("Chrome iniciado.")
 print("Entre manualmente em: Nota Fiscal - Lista Nota Fiscais")
-print("Voce tem 40 segundos.")
-sleep(40)
+login_wait_seconds = int(os.environ.get("LOGIN_WAIT_SECONDS", "40"))
+print(f"Voce tem {login_wait_seconds} segundos.")
+sleep(login_wait_seconds)
 
 # =====================
 # HELPERS – CLIQUE / LISTA / 502
@@ -521,12 +529,27 @@ def processar_nota_por_indice(i):
             fechar_modal_exportacao()
             sleep(min(2 * tentativa, 6))
 
-        except (StaleElementReferenceException, WebDriverException, Exception) as e:
+        except (StaleElementReferenceException, WebDriverException) as e:
             msg = str(e)
             print(f"Erro nota [{i+1}] tentativa {tentativa}/{MAX_RETRIES_POR_NOTA}: {msg}")
 
             try:
                 salvar_log("", info, status="ERRO", mensagem=msg[:180])
+            except Exception:
+                pass
+
+            if is_502_page():
+                recover_from_502()
+
+            fechar_modal_exportacao()
+            sleep(min(2 * tentativa, 6))
+
+        except Exception as e:
+            msg = str(e)
+            print(f"Erro inesperado nota [{i+1}] tentativa {tentativa}/{MAX_RETRIES_POR_NOTA}: {msg}")
+
+            try:
+                salvar_log("", info, status="ERRO", mensagem=("Inesperado: " + msg)[:180])
             except Exception:
                 pass
 
@@ -542,24 +565,30 @@ def processar_nota_por_indice(i):
 # =====================
 # MAIN
 # =====================
+def main():
+    try:
+        esperar_lista(timeout=20)
+    except TimeoutException:
+        print("Aviso: lista inicial nao carregou em 20s; seguindo com tentativas por item.")
+
+    total = len(driver.find_elements(By.NAME, "gridListaCheck"))
+    print(f"Notas encontradas na pagina: {total}")
+
+    i = 0
+    while True:
+        checkboxes = driver.find_elements(By.NAME, "gridListaCheck")
+        total = len(checkboxes)
+        if i >= total:
+            break
+
+        processar_nota_por_indice(i)
+        i += 1
+
+    print("Processo finalizado.")
+    sleep(2)
+
+
 try:
-    esperar_lista(timeout=20)
-except Exception:
-    pass
-
-total = len(driver.find_elements(By.NAME, "gridListaCheck"))
-print(f"Notas encontradas na pagina: {total}")
-
-i = 0
-while True:
-    checkboxes = driver.find_elements(By.NAME, "gridListaCheck")
-    total = len(checkboxes)
-    if i >= total:
-        break
-
-    processar_nota_por_indice(i)
-    i += 1
-
-print("Processo finalizado.")
-sleep(2)
-driver.quit()
+    main()
+finally:
+    driver.quit()
