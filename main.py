@@ -34,6 +34,12 @@ LOG_FILENAME = "log_downloads_nfse.csv"
 # EMPRESA_PASTA_FORCADA = "H2_IMOBILIARIA"
 EMPRESA_PASTA_FORCADA = ""
 
+# Competência alvo: por padrão, mês anterior ao mês atual (apuração).
+# Pode sobrescrever com APURACAO_REFERENCIA=MM/AAAA (ex.: 03/2026 -> alvo 02/2026).
+APURACAO_REFERENCIA = os.environ.get("APURACAO_REFERENCIA", "").strip()
+
+PARAR_PROCESSAMENTO = False
+
 # =====================
 # CHROME – PERFIL EXCLUSIVO
 # =====================
@@ -214,6 +220,36 @@ def parse_data_emissao_site(data_emissao: str):
     iso = f"{yyyy}-{mm}-{dd}"
     competencia = f"{mm}.{yyyy}"
     return yyyy, mm, dd, iso, competencia
+
+def calcular_mes_alvo(apuracao_ref: str = ""):
+    """
+    Retorna (ano_alvo, mes_alvo) para download.
+    Regra: sempre mês anterior ao mês de apuração.
+    apuracao_ref esperado: MM/AAAA.
+    """
+    if apuracao_ref:
+        m = re.match(r"^(\d{2})/(\d{4})$", apuracao_ref)
+        if not m:
+            raise ValueError(f"APURACAO_REFERENCIA invalida: {apuracao_ref}. Use MM/AAAA")
+        mes_ap, ano_ap = int(m.group(1)), int(m.group(2))
+    else:
+        hoje = datetime.now()
+        mes_ap, ano_ap = hoje.month, hoje.year
+
+    if not (1 <= mes_ap <= 12):
+        raise ValueError(f"Mes de apuracao invalido: {mes_ap}")
+
+    if mes_ap == 1:
+        return ano_ap - 1, 12
+    return ano_ap, mes_ap - 1
+
+def nota_no_mes_alvo(info: dict, ano_alvo: int, mes_alvo: int) -> bool:
+    parsed = parse_data_emissao_site(info.get("data_emissao", ""))
+    if not parsed:
+        return False
+    ano = int(parsed[0])
+    mes = int(parsed[1])
+    return ano == ano_alvo and mes == mes_alvo
 
 def extrair_dhproc_do_xml(caminho_xml):
     try:
@@ -520,7 +556,9 @@ def ir_para_proxima_pagina():
 # =====================
 # PROCESSAR UMA NOTA (sem falso 502)
 # =====================
-def processar_nota_por_indice(i):
+def processar_nota_por_indice(i, ano_alvo, mes_alvo):
+    global PARAR_PROCESSAMENTO
+
     tentativa = 0
     while tentativa < MAX_RETRIES_POR_NOTA:
         tentativa += 1
@@ -562,6 +600,17 @@ def processar_nota_por_indice(i):
                     salvar_log("", info, status="SKIP_CANCELADA", mensagem=msg[:180])
                 except Exception:
                     pass
+                return True
+
+            # Regra de negocio: ao encontrar nota fora do mês alvo, encerramos o robô.
+            if not nota_no_mes_alvo(info, ano_alvo, mes_alvo):
+                msg = f"Fora do mês alvo {mes_alvo:02d}/{ano_alvo} (data_emissao: {info.get('data_emissao', '')})"
+                print(f"[{i+1}] FORA DA COMPETENCIA -> NF={info.get('nf')} DATA={info.get('data_emissao')} | Encerrando processo.")
+                try:
+                    salvar_log("", info, status="SKIP_FORA_COMPETENCIA", mensagem=msg[:180])
+                except Exception:
+                    pass
+                PARAR_PROCESSAMENTO = True
                 return True
 
             print(f"[{i+1}] Tentativa {tentativa}/{MAX_RETRIES_POR_NOTA} -> NF={info.get('nf')} RPS={info.get('rps')} DATA={info.get('data_emissao')}")
@@ -664,10 +713,15 @@ def processar_nota_por_indice(i):
 # MAIN
 # =====================
 def main():
+    global PARAR_PROCESSAMENTO
+
     try:
         esperar_lista(timeout=20)
     except TimeoutException:
         print("Aviso: lista inicial nao carregou em 20s; seguindo com tentativas por item.")
+
+    ano_alvo, mes_alvo = calcular_mes_alvo(APURACAO_REFERENCIA)
+    print(f"Mes alvo de download: {mes_alvo:02d}/{ano_alvo}")
 
     definir_page_size(100)
 
@@ -683,8 +737,14 @@ def main():
             if i >= total:
                 break
 
-            processar_nota_por_indice(i)
+            processar_nota_por_indice(i, ano_alvo, mes_alvo)
+            if PARAR_PROCESSAMENTO:
+                break
             i += 1
+
+        if PARAR_PROCESSAMENTO:
+            print("Encerrando varredura ao encontrar nota fora do mês alvo.")
+            break
 
         if not ir_para_proxima_pagina():
             break
