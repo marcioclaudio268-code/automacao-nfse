@@ -3,9 +3,15 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait, Select
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.common.keys import Keys
+from selenium.common.exceptions import (
+    TimeoutException,
+    StaleElementReferenceException,
+    ElementClickInterceptedException,
+    WebDriverException,
+)
 from time import sleep
-import os, time, csv
+import os, time, re, csv
+from datetime import datetime
 import xml.etree.ElementTree as ET
 import shutil
 
@@ -16,6 +22,17 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DOWNLOAD_DIR = os.path.join(BASE_DIR, "downloads")
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
+TEMP_DOWNLOAD_DIR = os.path.join(DOWNLOAD_DIR, "_tmp")
+os.makedirs(TEMP_DOWNLOAD_DIR, exist_ok=True)
+
+MAX_RETRIES_POR_NOTA = 3
+WAIT_LISTA_TIMEOUT = 60
+LOG_FILENAME = "log_downloads_nfse.csv"
+
+# Se quiser travar a empresa SEM depender do texto do site, descomente:
+# EMPRESA_PASTA_FORCADA = "H2_IMOBILIARIA"
+EMPRESA_PASTA_FORCADA = ""
+
 # =====================
 # CHROME – PERFIL EXCLUSIVO
 # =====================
@@ -24,10 +41,10 @@ options.add_argument("--start-maximized")
 options.add_argument(r"--user-data-dir=C:\ChromeRobotProfile")
 
 prefs = {
-    "download.default_directory": DOWNLOAD_DIR,
+    "download.default_directory": TEMP_DOWNLOAD_DIR,  # <<< importante
     "download.prompt_for_download": False,
     "download.directory_upgrade": True,
-    "safebrowsing.enabled": True
+    "safebrowsing.enabled": True,
 }
 options.add_experimental_option("prefs", prefs)
 
@@ -40,147 +57,509 @@ print("Voce tem 40 segundos.")
 sleep(40)
 
 # =====================
-# AGUARDAR DOWNLOAD
+# HELPERS – CLIQUE / LISTA / 502
 # =====================
-def aguardar_xml_novo(pasta, timeout=40):
+def click_robusto(el):
+    try:
+        el.click()
+    except ElementClickInterceptedException:
+        driver.execute_script("arguments[0].click();", el)
+
+def esperar_lista(timeout=WAIT_LISTA_TIMEOUT):
+    WebDriverWait(driver, timeout).until(
+        EC.presence_of_all_elements_located((By.NAME, "gridListaCheck"))
+    )
+
+def lista_ativa():
+    try:
+        return len(driver.find_elements(By.NAME, "gridListaCheck")) > 0
+    except Exception:
+        return False
+
+def is_502_page():
+    """
+    Detecção ESTRITA de 502 (evita falso positivo).
+    Só retorna True se tiver sinais claros de "Bad Gateway" e a lista NÃO estiver ativa.
+    """
+    try:
+        if lista_ativa():
+            return False
+
+        title = (driver.title or "").lower()
+        src = (driver.page_source or "").lower()
+
+        if ("bad gateway" in title and "502" in title):
+            return True
+
+        # padrões comuns de página 502
+        if "502 bad gateway" in src:
+            return True
+        if "http error 502" in src:
+            return True
+        if ("bad gateway" in src and "502" in src):
+            return True
+
+        return False
+    except Exception:
+        return False
+
+def recover_from_502():
+    print("Detectado 502 REAL. Fazendo refresh e aguardando lista voltar...")
+    try:
+        driver.refresh()
+    except Exception:
+        try:
+            driver.get(driver.current_url)
+        except Exception:
+            pass
+
+    esperar_lista(timeout=WAIT_LISTA_TIMEOUT)
+    print("Lista recuperada apos 502.")
+
+# =====================
+# MODAL 'AVISO' (1 NOTA POR VEZ)
+# =====================
+def fechar_aviso_se_existir(timeout=2):
+    try:
+        modal = WebDriverWait(driver, timeout).until(
+            EC.visibility_of_element_located((
+                By.XPATH,
+                "//*[contains(.,'ATENÇÃO!') and contains(.,'apenas a exportação de uma nota')]"
+                "/ancestor::*[contains(@class,'modal')][1]"
+            ))
+        )
+        ok = modal.find_element(By.XPATH, ".//button[contains(.,'OK') or contains(.,'Ok')]")
+        click_robusto(ok)
+        sleep(0.2)
+        return True
+    except Exception:
+        return False
+
+def desmarcar_todas_notas():
+    checks = driver.find_elements(By.NAME, "gridListaCheck")
+    for c in checks:
+        try:
+            if c.is_selected():
+                driver.execute_script("arguments[0].scrollIntoView({block:'center'});", c)
+                click_robusto(c)
+                sleep(0.02)
+        except Exception:
+            pass
+
+# =====================
+# EXTRAIR INFO DA LINHA (NF/DATA/RPS/CHAVE)
+# =====================
+def td_text(tr, col):
+    el = tr.find_element(By.CSS_SELECTOR, f"td[id*=',{col}_gridLista']")
+    return (el.text or "").strip()
+
+def extrair_info_linha(checkbox):
+    tr = checkbox.find_element(By.XPATH, "./ancestor::tr[1]")
+    return {
+        "id_interno": checkbox.get_attribute("value") or "",
+        "nf": td_text(tr, 6),
+        "data_emissao": td_text(tr, 10),  # dd/mm/aaaa
+        "rps": td_text(tr, 11),
+        "chave": td_text(tr, 14),
+    }
+
+def chave_unica(info: dict) -> str:
+    ch = (info.get("chave") or "").strip()
+    if ch:
+        return ch
+    iid = (info.get("id_interno") or "").strip()
+    if iid:
+        return f"ID:{iid}"
+    nf = (info.get("nf") or "").strip()
+    rps = (info.get("rps") or "").strip()
+    dt = (info.get("data_emissao") or "").strip()
+    return f"NF:{nf}|RPS:{rps}|DT:{dt}"
+
+# =====================
+# DATA (SITE) -> ISO + COMPETENCIA
+# =====================
+def parse_data_emissao_site(data_emissao: str):
+    m = re.search(r"(\d{2})/(\d{2})/(\d{4})", data_emissao or "")
+    if not m:
+        return None
+    dd, mm, yyyy = m.group(1), m.group(2), m.group(3)
+    iso = f"{yyyy}-{mm}-{dd}"
+    competencia = f"{mm}.{yyyy}"
+    return yyyy, mm, dd, iso, competencia
+
+def extrair_dhproc_do_xml(caminho_xml):
+    try:
+        tree = ET.parse(caminho_xml)
+        root = tree.getroot()
+        dh = root.find(".//{*}dhProc")
+        if dh is not None and dh.text:
+            return dh.text.strip()
+    except Exception:
+        pass
+    return ""
+
+# =====================
+# DOWNLOAD – esperar XML NOVO (na pasta _tmp)
+# =====================
+def aguardar_xml_novo(pasta, timeout=80, xmls_antes=None):
     fim = time.time() + timeout
+    xmls_antes = set(xmls_antes or [])
+
     while time.time() < fim:
         arquivos = os.listdir(pasta)
 
         if any(a.endswith(".crdownload") for a in arquivos):
-            sleep(0.5)
+            sleep(0.4)
             continue
 
         xmls = [a for a in arquivos if a.lower().endswith(".xml")]
-        if xmls:
-            xmls.sort(
+        novos = [x for x in xmls if x not in xmls_antes]
+
+        if novos:
+            novos.sort(
                 key=lambda x: os.path.getmtime(os.path.join(pasta, x)),
                 reverse=True
             )
-            return os.path.join(pasta, xmls[0])
+            return os.path.join(pasta, novos[0])
 
-        sleep(0.5)
+        sleep(0.4)
 
-    raise TimeoutError("Download nao finalizou")
+    raise TimeoutError("Download nao finalizou (xml novo nao apareceu)")
 
 # =====================
-# FECHAR MODAL
+# FECHAR MODAL EXPORTACAO
 # =====================
-def fechar_modal():
+def fechar_modal_exportacao():
     try:
-        # força o fechamento pelo próprio bootstrap/jsf
         driver.execute_script("""
-            try{
-                $('#modalboxexportarnotas').modal('hide');
-            }catch(e){}
-
-            try{
-                $('.modal').modal('hide');
-            }catch(e){}
-
-            try{
-                $('.modal-backdrop').remove();
-            }catch(e){}
-
-            try{
-                $('.ui-widget-overlay').remove();
-            }catch(e){}
+            try{ $('#modalboxexportarnotas').modal('hide'); }catch(e){}
+            try{ $('.modal').modal('hide'); }catch(e){}
+            try{ $('.modal-backdrop').remove(); }catch(e){}
+            try{ $('.ui-widget-overlay').remove(); }catch(e){}
         """)
-
-        # espera desaparecer completamente
-        WebDriverWait(driver, 20).until(
+        WebDriverWait(driver, 8).until(
             EC.invisibility_of_element_located((By.ID, "modalboxexportarnotas"))
         )
-
-        sleep(0.8)
-
-    except:
+    except Exception:
         pass
 
 # =====================
-# ORGANIZAR XML
+# EMPRESA – PASTA CANONICA (evita H2_IMOBILIARIA vs IMOBILIARIA_H2_LTDA)
 # =====================
-def organizar_xml_por_pasta(caminho_xml):
+SUFIXOS_LEGAIS = {
+    "LTDA", "LTDA.", "ME", "EPP", "EIRELI",
+    "S/A", "SA", "S.A", "S.A.",
+}
+_SIGLA_ALFANUM_PATTERN = re.compile(r"^(?=.*[A-Z])(?=.*\d)[A-Z0-9]{2,10}$")
+
+def normalizar_nome_empresa(nome: str) -> str:
+    nome = (nome or "").strip().upper()
+    nome = re.sub(r"[\/\.\-]", " ", nome)
+    nome = re.sub(r"[^A-Z0-9\s]", " ", nome)
+    tokens = [t for t in re.split(r"\s+", nome) if t]
+
+    tokens = [t for t in tokens if t not in SUFIXOS_LEGAIS and t not in {"S", "A"}]
+
+    siglas = [t for t in tokens if _SIGLA_ALFANUM_PATTERN.match(t)]
+    resto = [t for t in tokens if t not in siglas]
+
+    out = siglas + resto
+    return "_".join(out) if out else "EMPRESA_DESCONHECIDA"
+
+def detectar_nome_empresa_da_tela():
     try:
-        tree = ET.parse(caminho_xml)
-        root = tree.getroot()
+        els = driver.find_elements(By.XPATH, "//*[contains(.,'Empresa:')]")
+        for el in els:
+            t = (el.text or "").strip().replace("\n", " ")
+            if not t or len(t) > 250:
+                continue
+            m = re.search(r"Empresa:\s*.+?\s*-\s*(.+)$", t)
+            if m:
+                return m.group(1).strip()
+    except Exception:
+        pass
+    return ""
 
-        ns = {"ns": "http://www.sped.fazenda.gov.br/nfse"}
+if EMPRESA_PASTA_FORCADA.strip():
+    EMPRESA_PASTA = normalizar_nome_empresa(EMPRESA_PASTA_FORCADA)
+else:
+    EMPRESA_PASTA = normalizar_nome_empresa(detectar_nome_empresa_da_tela())
 
-        def get(xpath):
-            el = root.find(xpath, ns)
-            return el.text.strip() if el is not None and el.text else ""
-
-        empresa = get(".//ns:emit/ns:xNome")
-        data_raw = get(".//ns:dhProc")
-        numero = get(".//ns:nDFSe")
-
-        if not empresa or not data_raw:
-            print("Nao foi possivel identificar empresa/data.")
-            return caminho_xml
-
-        data = data_raw[:10]
-        ano, mes, _ = data.split("-")
-
-        empresa = empresa.replace("/", "").replace(".", "").replace("-", "").replace(" ", "_").upper()
-
-        destino = os.path.join(DOWNLOAD_DIR, empresa, ano, mes)
-        os.makedirs(destino, exist_ok=True)
-
-        novo_nome = f"NFS_{numero}_{data}.xml"
-        destino_final = os.path.join(destino, novo_nome)
-
-        shutil.move(caminho_xml, destino_final)
-        return destino_final
-
-    except:
-        return caminho_xml
+print(f"Pasta da empresa: {EMPRESA_PASTA}")
 
 # =====================
-# LOOP PRINCIPAL
+# LOG (1 por empresa) + IDP
 # =====================
-checkboxes = driver.find_elements(By.NAME, "gridListaCheck")
-print(f"Notas encontradas na pagina: {len(checkboxes)}")
+def log_path_empresa():
+    return os.path.join(DOWNLOAD_DIR, EMPRESA_PASTA, LOG_FILENAME)
 
-for checkbox in checkboxes:
+def garantir_log_com_header(path_):
+    header = [
+        "timestamp",
+        "status",
+        "chave_unica",
+        "nf",
+        "data_emissao",
+        "rps",
+        "chave",
+        "id_interno",
+        "arquivo_xml",
+        "pasta_xml",
+        "mensagem",
+    ]
+    if not os.path.exists(path_):
+        os.makedirs(os.path.dirname(path_), exist_ok=True)
+        with open(path_, "w", newline="", encoding="utf-8-sig") as f:
+            writer = csv.writer(f, delimiter=";")
+            writer.writerow(header)
+
+def carregar_chaves_ok(path_):
+    chaves = set()
+    if not os.path.exists(path_):
+        return chaves
     try:
-        driver.execute_script("arguments[0].scrollIntoView({block:'center'});", checkbox)
-        sleep(0.3)
+        with open(path_, "r", newline="", encoding="utf-8-sig") as f:
+            reader = csv.reader(f, delimiter=";")
+            _ = next(reader, None)
+            for row in reader:
+                if not row or len(row) < 3:
+                    continue
+                status = (row[1] or "").strip().upper()
+                key = (row[2] or "").strip()
+                if status == "OK" and key:
+                    chaves.add(key)
+    except Exception:
+        pass
+    return chaves
 
-        if not checkbox.is_selected():
-            checkbox.click()
+def salvar_log(destino_xml, info, status="OK", mensagem=""):
+    path_ = log_path_empresa()
+    garantir_log_com_header(path_)
 
-        botao_xml = wait.until(
-            EC.element_to_be_clickable(
-                (By.XPATH, "//span[contains(@class,'fa-file-code-o')]/parent::*")
-            )
-        )
-        botao_xml.click()
+    key = chave_unica(info)
+    arquivo_xml = os.path.basename(destino_xml) if destino_xml and os.path.isfile(destino_xml) else ""
+    pasta_xml = os.path.dirname(destino_xml) if destino_xml and os.path.isfile(destino_xml) else ""
 
-        modal = wait.until(
-            EC.visibility_of_element_located((By.ID, "modalboxexportarnotas"))
-        )
+    row = [
+        datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        status,
+        key,
+        info.get("nf", ""),
+        info.get("data_emissao", ""),
+        info.get("rps", ""),
+        info.get("chave", ""),
+        info.get("id_interno", ""),
+        arquivo_xml,
+        pasta_xml,
+        mensagem,
+    ]
 
-        select = Select(modal.find_element(By.TAG_NAME, "select"))
-        select.select_by_visible_text("NF Nacional")
-        sleep(0.4)
+    with open(path_, "a", newline="", encoding="utf-8-sig") as f:
+        writer = csv.writer(f, delimiter=";")
+        writer.writerow(row)
 
-        modal.find_element(By.XPATH, ".//button[contains(.,'Visualizar')]").click()
+    return path_
 
-        xml = aguardar_xml_novo(DOWNLOAD_DIR)
-        organizar_xml_por_pasta(xml)
+chaves_ok = carregar_chaves_ok(log_path_empresa())
+print(f"Chaves OK no log: {len(chaves_ok)}")
+print(f"Log: {log_path_empresa()}")
 
-        fechar_modal()
+# =====================
+# ORGANIZAR (competencia MM.AAAA) + mover com retry
+# =====================
+def mover_com_retry(src, dst, tentativas=6):
+    last = None
+    for i in range(tentativas):
+        try:
+            shutil.move(src, dst)
+            return
+        except Exception as e:
+            last = e
+            sleep(0.3 + i * 0.4)
+    raise last
 
-        if checkbox.is_selected():
-            checkbox.click()
+def organizar_xml_por_pasta(caminho_xml, info):
+    """
+    Move para:
+      downloads/EMPRESA_PASTA/MM.AAAA/NFS_<NF>_<YYYY-MM-DD>.xml
+    Data/competência vem da linha do site (fallback: dhProc).
+    """
+    parsed = parse_data_emissao_site(info.get("data_emissao", ""))
+    if parsed:
+        _, _, _, data_iso, competencia = parsed
+    else:
+        dhproc = extrair_dhproc_do_xml(caminho_xml)
+        if dhproc and len(dhproc) >= 10:
+            data_iso = dhproc[:10]
+            ano, mes, _ = data_iso.split("-")
+            competencia = f"{mes}.{ano}"
+        else:
+            data_iso, competencia = "SEM_DATA", "SEM_COMPETENCIA"
 
-        sleep(0.4)
+    nf = (info.get("nf") or "").strip() or "SEM_NUMERO"
+    destino_dir = os.path.join(DOWNLOAD_DIR, EMPRESA_PASTA, competencia)
+    os.makedirs(destino_dir, exist_ok=True)
 
-    except Exception as e:
-        print("Erro:", e)
-        continue
+    if data_iso != "SEM_DATA":
+        novo_nome = f"NFS_{nf}_{data_iso}.xml"
+    else:
+        novo_nome = f"NFS_{nf}.xml"
+
+    destino_final = os.path.join(destino_dir, novo_nome)
+
+    # não sobrescrever
+    if os.path.exists(destino_final):
+        base, ext = os.path.splitext(novo_nome)
+        k = 1
+        while True:
+            cand = os.path.join(destino_dir, f"{base}_{k}{ext}")
+            if not os.path.exists(cand):
+                destino_final = cand
+                break
+            k += 1
+
+    mover_com_retry(caminho_xml, destino_final)
+    return destino_final
+
+# =====================
+# PROCESSAR UMA NOTA (sem falso 502)
+# =====================
+def processar_nota_por_indice(i):
+    tentativa = 0
+    while tentativa < MAX_RETRIES_POR_NOTA:
+        tentativa += 1
+        info = {}
+
+        try:
+            if is_502_page():
+                recover_from_502()
+
+            esperar_lista(timeout=WAIT_LISTA_TIMEOUT)
+
+            checkboxes = driver.find_elements(By.NAME, "gridListaCheck")
+            if i >= len(checkboxes):
+                return True
+
+            checkbox = checkboxes[i]
+            driver.execute_script("arguments[0].scrollIntoView({block:'center'});", checkbox)
+            sleep(0.10)
+
+            # garante só 1 selecionada
+            desmarcar_todas_notas()
+
+            checkboxes = driver.find_elements(By.NAME, "gridListaCheck")
+            checkbox = checkboxes[i]
+
+            info = extrair_info_linha(checkbox)
+            key = chave_unica(info)
+
+            # PREMIUM: SKIP por log
+            if key in chaves_ok:
+                print(f"[{i+1}] SKIP -> NF={info.get('nf')} DATA={info.get('data_emissao')}")
+                return True
+
+            print(f"[{i+1}] Tentativa {tentativa}/{MAX_RETRIES_POR_NOTA} -> NF={info.get('nf')} RPS={info.get('rps')} DATA={info.get('data_emissao')}")
+
+            if not checkbox.is_selected():
+                click_robusto(checkbox)
+
+            xmls_antes = [a for a in os.listdir(TEMP_DOWNLOAD_DIR) if a.lower().endswith(".xml")]
+
+            # botão exportar XML (ID fixo)
+            botao_xml = wait.until(EC.element_to_be_clickable((By.ID, "_imagebutton12")))
+            click_robusto(botao_xml)
+
+            # aviso de "só 1 por vez"
+            if fechar_aviso_se_existir(timeout=2):
+                desmarcar_todas_notas()
+                checkboxes = driver.find_elements(By.NAME, "gridListaCheck")
+                checkbox = checkboxes[i]
+                if not checkbox.is_selected():
+                    click_robusto(checkbox)
+                botao_xml = wait.until(EC.element_to_be_clickable((By.ID, "_imagebutton12")))
+                click_robusto(botao_xml)
+
+            # modal exportação
+            modal = wait.until(EC.visibility_of_element_located((By.ID, "modalboxexportarnotas")))
+            select = Select(modal.find_element(By.TAG_NAME, "select"))
+            select.select_by_visible_text("NF Nacional")
+            sleep(0.15)
+
+            visualizar_btn = modal.find_element(By.XPATH, ".//button[contains(.,'Visualizar')]")
+            click_robusto(visualizar_btn)
+
+            # >>> NÃO checar 502 aqui. O critério é: BAIXOU XML NOVO.
+            xml_baixado = aguardar_xml_novo(TEMP_DOWNLOAD_DIR, timeout=80, xmls_antes=xmls_antes)
+
+            destino_final = organizar_xml_por_pasta(xml_baixado, info)
+
+            # log OK + cache (isso evita repetir na mesma execução)
+            logp = salvar_log(destino_final, info, status="OK", mensagem="OK (download confirmado por arquivo)")
+            chaves_ok.add(key)
+
+            print(f"OK -> {destino_final}")
+            print(f"Log -> {logp}")
+
+            # fechar modal (não pode quebrar o fluxo se falhar)
+            fechar_modal_exportacao()
+
+            return True
+
+        except TimeoutException as e:
+            # Timeout geralmente = não abriu modal / não baixou a tempo
+            msg = f"Timeout: {str(e)}"
+            print(f"Erro nota [{i+1}] tentativa {tentativa}/{MAX_RETRIES_POR_NOTA}: {msg}")
+
+            try:
+                salvar_log("", info, status="ERRO", mensagem=msg[:180])
+            except Exception:
+                pass
+
+            if is_502_page():
+                recover_from_502()
+
+            fechar_modal_exportacao()
+            sleep(min(2 * tentativa, 6))
+
+        except (StaleElementReferenceException, WebDriverException, Exception) as e:
+            msg = str(e)
+            print(f"Erro nota [{i+1}] tentativa {tentativa}/{MAX_RETRIES_POR_NOTA}: {msg}")
+
+            try:
+                salvar_log("", info, status="ERRO", mensagem=msg[:180])
+            except Exception:
+                pass
+
+            if is_502_page():
+                recover_from_502()
+
+            fechar_modal_exportacao()
+            sleep(min(2 * tentativa, 6))
+
+    print(f"Falhou apos {MAX_RETRIES_POR_NOTA} tentativas. Pulando nota {i+1}.")
+    return False
+
+# =====================
+# MAIN
+# =====================
+try:
+    esperar_lista(timeout=20)
+except Exception:
+    pass
+
+total = len(driver.find_elements(By.NAME, "gridListaCheck"))
+print(f"Notas encontradas na pagina: {total}")
+
+i = 0
+while True:
+    checkboxes = driver.find_elements(By.NAME, "gridListaCheck")
+    total = len(checkboxes)
+    if i >= total:
+        break
+
+    processar_nota_por_indice(i)
+    i += 1
 
 print("Processo finalizado.")
-sleep(3)
+sleep(2)
 driver.quit()
