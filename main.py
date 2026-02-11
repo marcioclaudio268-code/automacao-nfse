@@ -39,6 +39,9 @@ EMPRESA_PASTA_FORCADA = ""
 APURACAO_REFERENCIA = os.environ.get("APURACAO_REFERENCIA", "").strip()
 
 PARAR_PROCESSAMENTO = False
+ENCONTROU_MES_ALVO = False
+CONT_FORA_APOS_ALVO = 0
+LIMITE_HEURISTICA_FORA_ALVO = 20
 
 # =====================
 # CHROME – PERFIL EXCLUSIVO
@@ -243,13 +246,31 @@ def calcular_mes_alvo(apuracao_ref: str = ""):
         return ano_ap - 1, 12
     return ano_ap, mes_ap - 1
 
-def nota_no_mes_alvo(info: dict, ano_alvo: int, mes_alvo: int) -> bool:
+def comparar_competencia_nota(info: dict, ano_alvo: int, mes_alvo: int):
+    """
+    Retorna:
+      1  -> nota mais nova que o mês alvo
+      0  -> nota no mês alvo
+     -1  -> nota mais antiga que o mês alvo
+      None -> data inválida/ausente
+    """
     parsed = parse_data_emissao_site(info.get("data_emissao", ""))
     if not parsed:
-        return False
+        return None
+
     ano = int(parsed[0])
     mes = int(parsed[1])
-    return ano == ano_alvo and mes == mes_alvo
+    comp_nota = (ano, mes)
+    comp_alvo = (ano_alvo, mes_alvo)
+
+    if comp_nota == comp_alvo:
+        return 0
+    if comp_nota > comp_alvo:
+        return 1
+    return -1
+
+def nota_no_mes_alvo(info: dict, ano_alvo: int, mes_alvo: int) -> bool:
+    return comparar_competencia_nota(info, ano_alvo, mes_alvo) == 0
 
 def extrair_dhproc_do_xml(caminho_xml):
     try:
@@ -557,7 +578,7 @@ def ir_para_proxima_pagina():
 # PROCESSAR UMA NOTA (sem falso 502)
 # =====================
 def processar_nota_por_indice(i, ano_alvo, mes_alvo):
-    global PARAR_PROCESSAMENTO
+    global PARAR_PROCESSAMENTO, ENCONTROU_MES_ALVO, CONT_FORA_APOS_ALVO
 
     tentativa = 0
     while tentativa < MAX_RETRIES_POR_NOTA:
@@ -602,16 +623,49 @@ def processar_nota_por_indice(i, ano_alvo, mes_alvo):
                     pass
                 return True
 
-            # Regra de negocio: ao encontrar nota fora do mês alvo, encerramos o robô.
-            if not nota_no_mes_alvo(info, ano_alvo, mes_alvo):
-                msg = f"Fora do mês alvo {mes_alvo:02d}/{ano_alvo} (data_emissao: {info.get('data_emissao', '')})"
-                print(f"[{i+1}] FORA DA COMPETENCIA -> NF={info.get('nf')} DATA={info.get('data_emissao')} | Encerrando processo.")
+            # Regra de negocio por heurística (ordem decrescente por data):
+            # - notas mais novas que o alvo: apenas pular até chegar no mês alvo.
+            # - após entrar no mês alvo, ao acumular 20 notas mais antigas, encerrar.
+            comp = comparar_competencia_nota(info, ano_alvo, mes_alvo)
+            if comp is None:
+                msg = f"Data de emissao invalida/ausente: {info.get('data_emissao', '')}"
+                print(f"[{i+1}] SKIP DATA INVALIDA -> NF={info.get('nf')} DATA={info.get('data_emissao')}")
+                try:
+                    salvar_log("", info, status="SKIP_DATA_INVALIDA", mensagem=msg[:180])
+                except Exception:
+                    pass
+                return True
+
+            if comp == 1:
+                msg = f"Nota mais nova que mês alvo {mes_alvo:02d}/{ano_alvo}"
+                print(f"[{i+1}] SKIP COMPETENCIA (MAIS NOVA) -> NF={info.get('nf')} DATA={info.get('data_emissao')}")
                 try:
                     salvar_log("", info, status="SKIP_FORA_COMPETENCIA", mensagem=msg[:180])
                 except Exception:
                     pass
-                PARAR_PROCESSAMENTO = True
                 return True
+
+            if comp == -1:
+                msg = f"Nota mais antiga que mês alvo {mes_alvo:02d}/{ano_alvo}"
+                print(f"[{i+1}] SKIP COMPETENCIA (MAIS ANTIGA) -> NF={info.get('nf')} DATA={info.get('data_emissao')}")
+                try:
+                    salvar_log("", info, status="SKIP_FORA_COMPETENCIA", mensagem=msg[:180])
+                except Exception:
+                    pass
+
+                if ENCONTROU_MES_ALVO:
+                    CONT_FORA_APOS_ALVO += 1
+                    if CONT_FORA_APOS_ALVO >= LIMITE_HEURISTICA_FORA_ALVO:
+                        print(
+                            f"Heuristica acionada: {CONT_FORA_APOS_ALVO} notas consecutivas fora do alvo "
+                            f"apos encontrar o mês alvo. Encerrando processo."
+                        )
+                        PARAR_PROCESSAMENTO = True
+                return True
+
+            # comp == 0 (mês alvo)
+            ENCONTROU_MES_ALVO = True
+            CONT_FORA_APOS_ALVO = 0
 
             print(f"[{i+1}] Tentativa {tentativa}/{MAX_RETRIES_POR_NOTA} -> NF={info.get('nf')} RPS={info.get('rps')} DATA={info.get('data_emissao')}")
 
@@ -713,7 +767,7 @@ def processar_nota_por_indice(i, ano_alvo, mes_alvo):
 # MAIN
 # =====================
 def main():
-    global PARAR_PROCESSAMENTO
+    global PARAR_PROCESSAMENTO, ENCONTROU_MES_ALVO, CONT_FORA_APOS_ALVO
 
     try:
         esperar_lista(timeout=20)
@@ -721,7 +775,11 @@ def main():
         print("Aviso: lista inicial nao carregou em 20s; seguindo com tentativas por item.")
 
     ano_alvo, mes_alvo = calcular_mes_alvo(APURACAO_REFERENCIA)
+    ENCONTROU_MES_ALVO = False
+    CONT_FORA_APOS_ALVO = 0
+    PARAR_PROCESSAMENTO = False
     print(f"Mes alvo de download: {mes_alvo:02d}/{ano_alvo}")
+    print(f"Heuristica de parada: {LIMITE_HEURISTICA_FORA_ALVO} notas antigas consecutivas apos o mês alvo.")
 
     definir_page_size(100)
 
@@ -743,7 +801,7 @@ def main():
             i += 1
 
         if PARAR_PROCESSAMENTO:
-            print("Encerrando varredura ao encontrar nota fora do mês alvo.")
+            print("Encerrando varredura por heuristica de competência.")
             break
 
         if not ir_para_proxima_pagina():
