@@ -1,6 +1,7 @@
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import WebDriverWait, Select
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import (
@@ -83,6 +84,20 @@ def lista_ativa():
         return len(driver.find_elements(By.NAME, "gridListaCheck")) > 0
     except Exception:
         return False
+
+def assinatura_lista():
+    """Assinatura leve da grid para detectar refresh/paginação."""
+    try:
+        checks = driver.find_elements(By.NAME, "gridListaCheck")
+        values = [c.get_attribute("value") or "" for c in checks[:5]]
+        return f"{len(checks)}|{'|'.join(values)}"
+    except Exception:
+        return ""
+
+def esperar_troca_de_grid(assinatura_anterior, timeout=WAIT_LISTA_TIMEOUT):
+    def mudou(_):
+        return assinatura_lista() != assinatura_anterior
+    WebDriverWait(driver, timeout).until(mudou)
 
 def is_502_page():
     """
@@ -435,6 +450,74 @@ def organizar_xml_por_pasta(caminho_xml, info):
     return destino_final
 
 # =====================
+# PAGINACAO
+# =====================
+def page_size_atual():
+    try:
+        el = driver.find_element(By.ID, "gridListaPageSize")
+        return int((el.get_attribute("value") or "0").strip() or "0")
+    except Exception:
+        return 0
+
+def definir_page_size(max_por_pagina=100):
+    alvo = min(max_por_pagina, 100)
+    atual = page_size_atual()
+    if atual == alvo:
+        print(f"Page size ja esta em {alvo}.")
+        return
+
+    assinatura_anterior = assinatura_lista()
+    inp = wait.until(EC.element_to_be_clickable((By.ID, "gridListaPageSize")))
+    inp.click()
+    try:
+        inp.send_keys(Keys.CONTROL, "a")
+    except Exception:
+        inp.send_keys(Keys.COMMAND, "a")
+    inp.send_keys(str(alvo))
+    inp.send_keys(Keys.ENTER)
+
+    try:
+        esperar_troca_de_grid(assinatura_anterior, timeout=WAIT_LISTA_TIMEOUT)
+    except TimeoutException:
+        # fallback: ao menos garantir que a lista segue ativa
+        esperar_lista(timeout=WAIT_LISTA_TIMEOUT)
+
+    atual = page_size_atual()
+    print(f"Page size configurado: {atual}")
+
+def pagina_atual():
+    try:
+        val = driver.execute_script("return (document.getElementById('gridListaPage')||{}).value || '';")
+        if str(val).strip().isdigit():
+            return int(str(val).strip())
+    except Exception:
+        pass
+    return None
+
+def ir_para_proxima_pagina():
+    assinatura_anterior = assinatura_lista()
+    pag_antes = pagina_atual()
+
+    botoes = driver.find_elements(
+        By.XPATH,
+        "//span[contains(@onclick,'mudarPagina,gridLista') and normalize-space(.)='»']"
+    )
+    if not botoes:
+        return False
+
+    botao_next = botoes[0]
+    click_robusto(botao_next)
+
+    try:
+        esperar_troca_de_grid(assinatura_anterior, timeout=WAIT_LISTA_TIMEOUT)
+        return True
+    except TimeoutException:
+        pag_depois = pagina_atual()
+        if pag_antes is not None and pag_depois is not None and pag_depois > pag_antes:
+            return True
+        return False
+
+# =====================
 # PROCESSAR UMA NOTA (sem falso 502)
 # =====================
 def processar_nota_por_indice(i):
@@ -586,18 +669,26 @@ def main():
     except TimeoutException:
         print("Aviso: lista inicial nao carregou em 20s; seguindo com tentativas por item.")
 
-    total = len(driver.find_elements(By.NAME, "gridListaCheck"))
-    print(f"Notas encontradas na pagina: {total}")
+    definir_page_size(100)
 
-    i = 0
+    pagina = 1
     while True:
-        checkboxes = driver.find_elements(By.NAME, "gridListaCheck")
-        total = len(checkboxes)
-        if i >= total:
-            break
+        total = len(driver.find_elements(By.NAME, "gridListaCheck"))
+        print(f"Pagina {pagina}: {total} notas encontradas.")
 
-        processar_nota_por_indice(i)
-        i += 1
+        i = 0
+        while True:
+            checkboxes = driver.find_elements(By.NAME, "gridListaCheck")
+            total = len(checkboxes)
+            if i >= total:
+                break
+
+            processar_nota_por_indice(i)
+            i += 1
+
+        if not ir_para_proxima_pagina():
+            break
+        pagina += 1
 
     print("Processo finalizado.")
     sleep(2)
