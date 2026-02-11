@@ -166,10 +166,15 @@ def extrair_info_linha(checkbox):
     return {
         "id_interno": checkbox.get_attribute("value") or "",
         "nf": td_text(tr, 6),
+        "situacao": td_text(tr, 9),
         "data_emissao": td_text(tr, 10),  # dd/mm/aaaa
         "rps": td_text(tr, 11),
         "chave": td_text(tr, 14),
     }
+
+def nota_cancelada(info: dict) -> bool:
+    situacao = (info.get("situacao") or "").strip().lower()
+    return "cancelad" in situacao
 
 def chave_unica(info: dict) -> str:
     ch = (info.get("chave") or "").strip()
@@ -464,6 +469,16 @@ def processar_nota_por_indice(i):
             # PREMIUM: SKIP por log
             if key in chaves_ok:
                 print(f"[{i+1}] SKIP -> NF={info.get('nf')} DATA={info.get('data_emissao')}")
+                return True
+
+            # Regra de negocio: não baixar notas canceladas.
+            if nota_cancelada(info):
+                msg = f"Nota cancelada (situacao: {info.get('situacao', '')})"
+                print(f"[{i+1}] SKIP CANCELADA -> NF={info.get('nf')} DATA={info.get('data_emissao')}")
+                try:
+                    salvar_log("", info, status="SKIP_CANCELADA", mensagem=msg[:180])
+                except Exception:
+                    pass
                 return True
 
             print(f"[{i+1}] Tentativa {tentativa}/{MAX_RETRIES_POR_NOTA} -> NF={info.get('nf')} RPS={info.get('rps')} DATA={info.get('data_emissao')}")
