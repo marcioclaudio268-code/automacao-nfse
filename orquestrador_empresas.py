@@ -66,6 +66,30 @@ def carregar_empresas_csv(path_csv: str):
     return empresas
 
 
+
+
+def encontrar_header_xlsx(ws, max_linhas_busca=25):
+    linhas = ws.iter_rows(values_only=True)
+    cache = []
+
+    for i, row in enumerate(linhas, start=1):
+        cache.append(row)
+        if i > max_linhas_busca:
+            break
+
+        header_norm = [normalizar_header(str(h) if h is not None else "") for h in row]
+        try:
+            cols = mapear_colunas(header_norm)
+            idx = {h: j for j, h in enumerate(header_norm)}
+            return i, cols, idx
+        except ValueError:
+            continue
+
+    raise ValueError(
+        "Colunas obrigatórias não encontradas nas primeiras linhas do XLSX. "
+        "Esperado: Código, Razão Social, CNPJ, Segmento, Senha Prefeitura"
+    )
+
 def carregar_empresas_xlsx(path_xlsx: str):
     try:
         from openpyxl import load_workbook
@@ -75,17 +99,13 @@ def carregar_empresas_xlsx(path_xlsx: str):
     wb = load_workbook(path_xlsx, read_only=True, data_only=True)
     ws = wb.active
 
-    linhas = ws.iter_rows(values_only=True)
-    header_raw = next(linhas, None)
-    if not header_raw:
-        return []
-
-    header_norm = [normalizar_header(str(h) if h is not None else "") for h in header_raw]
-    col_codigo, col_razao, col_cnpj, col_segmento, col_senha = mapear_colunas(header_norm)
-    idx = {h: i for i, h in enumerate(header_norm)}
+    linha_header, (col_codigo, col_razao, col_cnpj, col_segmento, col_senha), idx = encontrar_header_xlsx(ws)
 
     empresas = []
-    for row in linhas:
+    for i, row in enumerate(ws.iter_rows(values_only=True), start=1):
+        if i <= linha_header:
+            continue
+
         vals = ["" if v is None else str(v).strip() for v in row]
         cnpj = vals[idx[col_cnpj]] if idx[col_cnpj] < len(vals) else ""
         if not cnpj:
