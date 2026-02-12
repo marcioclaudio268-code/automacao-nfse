@@ -42,7 +42,7 @@ APURACAO_REFERENCIA = os.environ.get("APURACAO_REFERENCIA", "").strip()
 PARAR_PROCESSAMENTO = False
 ENCONTROU_MES_ALVO = False
 CONT_FORA_APOS_ALVO = 0
-LIMITE_HEURISTICA_FORA_ALVO = 20
+LIMITE_HEURISTICA_FORA_ALVO = int(os.environ.get("LIMITE_HEURISTICA_FORA_ALVO", "2"))
 STRICT_LISTA_INICIAL = os.environ.get("STRICT_LISTA_INICIAL", "0").strip() == "1"
 MSG_CAPTCHA_TIMEOUT = "CAPTCHA_NAO_RESOLVIDO_NO_TEMPO"
 EXIT_CODE_CAPTCHA_TIMEOUT = 30
@@ -711,7 +711,7 @@ def processar_nota_por_indice(i, ano_alvo, mes_alvo):
 
             # Regra de negocio por heurística (ordem decrescente por data):
             # - notas mais novas que o alvo: apenas pular até chegar no mês alvo.
-            # - após entrar no mês alvo, ao acumular 20 notas mais antigas, encerrar.
+            # - após entrar no mês alvo, ao acumular LIMITE_HEURISTICA_FORA_ALVO notas mais antigas, encerrar.
             comp = comparar_competencia_nota(info, ano_alvo, mes_alvo)
             if comp is None:
                 msg = f"Data de emissao invalida/ausente: {info.get('data_emissao', '')}"

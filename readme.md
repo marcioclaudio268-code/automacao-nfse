@@ -204,6 +204,8 @@ python orquestrador_empresas.py
 
 Opcional: para usar outro arquivo, defina `EMPRESAS_ARQUIVO` (ex.: `empresas.csv`).
 
+Opcional: para reduzir/aumentar parada por notas antigas fora da competência, use `LIMITE_HEURISTICA_FORA_ALVO` (padrão atual: `2`).
+
 3. Para cada empresa (etapa atual):
    - o robô abre a URL de login da prefeitura;
    - preenche CNPJ/senha automaticamente;
