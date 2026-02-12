@@ -207,7 +207,7 @@ Opcional: para usar outro arquivo, defina `EMPRESAS_ARQUIVO` (ex.: `empresas.csv
 3. Para cada empresa (etapa atual):
    - o robô abre a URL de login da prefeitura;
    - preenche CNPJ/senha automaticamente;
-   - você resolve o captcha e pressiona `ENTER` no terminal;
+   - você resolve o captcha, clica em `Entrar` manualmente e depois pressiona `ENTER` no terminal;
    - depois navega até `Nota Fiscal -> Lista Nota Fiscais` e pressiona `ENTER` novamente.
 
 4. O relatório consolidado será gerado na raiz:

@@ -123,16 +123,15 @@ def preencher_login_prefeitura_se_habilitado():
     campo_senha.clear()
     campo_senha.send_keys(senha)
 
-    btn = wait.until(EC.element_to_be_clickable((By.ID, LOGIN_BOTAO_ENTRAR)))
-    click_robusto(btn)
+    wait.until(EC.element_to_be_clickable((By.ID, LOGIN_BOTAO_ENTRAR)))
 
-    print("Login preenchido automaticamente. Resolva o captcha no navegador.")
-    print(f"Após resolver, pressione ENTER no terminal (timeout {login_wait_seconds}s).")
+    print("CNPJ e senha preenchidos. Agora resolva o captcha e clique em 'Entrar' manualmente.")
+    print(f"Quando o dashboard abrir, pressione ENTER no terminal (timeout {login_wait_seconds}s).")
     if not aguardar_enter_ou_timeout(login_wait_seconds):
         raise RuntimeError(MSG_CAPTCHA_TIMEOUT)
 
     try:
-        WebDriverWait(driver, 15).until(EC.presence_of_element_located((By.ID, LOGIN_CARD_DASHBOARD)))
+        WebDriverWait(driver, 20).until(EC.presence_of_element_located((By.ID, LOGIN_CARD_DASHBOARD)))
     except TimeoutException:
         raise RuntimeError("LOGIN_NAO_CONFIRMADO_APOS_CAPTCHA")
 

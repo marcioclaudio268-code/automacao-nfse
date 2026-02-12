@@ -142,7 +142,7 @@ def executar_empresa(empresa: dict):
         print(f"Senha prefeitura (referência): {empresa['senha_prefeitura']}")
         print(f"Tentativa {tentativa}/{MAX_TENTATIVAS}")
         print(
-            f"Etapa 1: login automático (CNPJ/senha) + captcha humano. Tempo por etapa: {LOGIN_WAIT_SECONDS}s."
+            f"Etapa 1: login automático (CNPJ/senha) + captcha humano; clique Entrar manualmente. Tempo por etapa: {LOGIN_WAIT_SECONDS}s."
         )
 
         env = os.environ.copy()
