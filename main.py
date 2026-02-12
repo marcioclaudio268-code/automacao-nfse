@@ -12,7 +12,6 @@ from selenium.common.exceptions import (
 )
 from time import sleep
 import os, time, re, csv, tempfile
-import threading
 import sys
 from datetime import datetime
 import xml.etree.ElementTree as ET
@@ -87,24 +86,6 @@ print("Chrome iniciado.")
 login_wait_seconds = int(os.environ.get("LOGIN_WAIT_SECONDS", "120"))
 
 
-def aguardar_enter_ou_timeout(segundos):
-    """Aguarda ENTER no terminal; retorna False em timeout/EOF."""
-    terminou = threading.Event()
-
-    def _worker():
-        try:
-            input()
-            terminou.set()
-        except Exception:
-            # stdin indisponível/fechado
-            pass
-
-    t = threading.Thread(target=_worker, daemon=True)
-    t.start()
-    t.join(segundos)
-    return terminou.is_set()
-
-
 def preencher_login_prefeitura_se_habilitado():
     if not AUTO_LOGIN_PREFEITURA:
         return
@@ -125,26 +106,21 @@ def preencher_login_prefeitura_se_habilitado():
 
     wait.until(EC.element_to_be_clickable((By.ID, LOGIN_BOTAO_ENTRAR)))
 
-    print("CNPJ e senha preenchidos. Agora resolva o captcha e clique em 'Entrar' manualmente.")
-    print(f"Quando o dashboard abrir, pressione ENTER no terminal (timeout {login_wait_seconds}s).")
-    if not aguardar_enter_ou_timeout(login_wait_seconds):
-        raise RuntimeError(MSG_CAPTCHA_TIMEOUT)
+    print("CNPJ e senha preenchidos. Resolva o captcha e clique em 'Entrar' manualmente.")
+    print(f"Aguardando dashboard por até {login_wait_seconds}s...")
 
     try:
-        WebDriverWait(driver, 20).until(EC.presence_of_element_located((By.ID, LOGIN_CARD_DASHBOARD)))
+        WebDriverWait(driver, login_wait_seconds).until(EC.presence_of_element_located((By.ID, LOGIN_CARD_DASHBOARD)))
     except TimeoutException:
-        raise RuntimeError("LOGIN_NAO_CONFIRMADO_APOS_CAPTCHA")
-
-    print("Login confirmado. Navegue para: Nota Fiscal > Lista Nota Fiscais.")
-    print(f"Pressione ENTER quando estiver na lista (timeout {login_wait_seconds}s).")
-    if not aguardar_enter_ou_timeout(login_wait_seconds):
         raise RuntimeError(MSG_CAPTCHA_TIMEOUT)
+
+    navegar_para_lista_nota_fiscal()
 
 
 if not AUTO_LOGIN_PREFEITURA:
     print("Entre manualmente em: Nota Fiscal - Lista Nota Fiscais")
-    print(f"Você tem {login_wait_seconds} segundos (ou pressione ENTER para seguir).")
-    aguardar_enter_ou_timeout(login_wait_seconds)
+    print(f"Você tem {login_wait_seconds} segundos para iniciar manualmente.")
+    sleep(login_wait_seconds)
 
 # =====================
 # HELPERS – CLIQUE / LISTA / 502
@@ -154,6 +130,32 @@ def click_robusto(el):
         el.click()
     except ElementClickInterceptedException:
         driver.execute_script("arguments[0].click();", el)
+
+
+def navegar_para_lista_nota_fiscal():
+    print("Login confirmado. Navegando automaticamente: Nota Fiscal -> Lista Nota Fiscais...")
+
+    card_nf = wait.until(EC.element_to_be_clickable((By.ID, LOGIN_CARD_DASHBOARD)))
+    click_robusto(card_nf)
+
+    seletores_lista = [
+        (By.XPATH, "//a[contains(normalize-space(.), 'Lista Nota Fiscais')]"),
+        (By.XPATH, "//span[contains(normalize-space(.), 'Lista Nota Fiscais')]"),
+        (By.XPATH, "//*[contains(normalize-space(.), 'Lista Nota Fiscais')]"),
+    ]
+
+    ultimo_erro = None
+    for by, sel in seletores_lista:
+        try:
+            el = WebDriverWait(driver, 8).until(EC.element_to_be_clickable((by, sel)))
+            click_robusto(el)
+            esperar_lista(timeout=WAIT_LISTA_TIMEOUT)
+            print("Tela de lista de notas carregada automaticamente.")
+            return
+        except Exception as e:
+            ultimo_erro = e
+
+    raise RuntimeError(f"NAO_FOI_POSSIVEL_ABRIR_LISTA_NOTAS: {ultimo_erro}")
 
 def esperar_lista(timeout=WAIT_LISTA_TIMEOUT):
     WebDriverWait(driver, timeout).until(
