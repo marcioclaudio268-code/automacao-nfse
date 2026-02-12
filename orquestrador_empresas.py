@@ -2,9 +2,10 @@ import csv
 import os
 import subprocess
 import sys
+import unicodedata
 from datetime import datetime
 
-CSV_EMPRESAS = os.environ.get("EMPRESAS_CSV", "empresas.csv")
+CSV_EMPRESAS = os.environ.get("EMPRESAS_ARQUIVO", os.environ.get("EMPRESAS_CSV", "empresas.xlsx"))
 REPORT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "report_execucao_empresas.csv")
 MAX_TENTATIVAS = int(os.environ.get("MAX_TENTATIVAS_EMPRESA", "3"))
 LOGIN_WAIT_SECONDS = int(os.environ.get("LOGIN_WAIT_SECONDS", "120"))
@@ -12,37 +13,44 @@ MSG_CAPTCHA_TIMEOUT = "CAPTCHA_NAO_RESOLVIDO_NO_TEMPO"
 
 
 def normalizar_header(h: str) -> str:
-    return (h or "").strip().lower()
+    txt = (h or "").strip().lower()
+    txt = unicodedata.normalize("NFKD", txt)
+    return "".join(ch for ch in txt if not unicodedata.combining(ch))
 
 
-def carregar_empresas(path_csv: str):
+def mapear_colunas(headers_normalizados):
+    col_codigo = None
+    col_razao = None
+    col_cnpj = None
+    col_segmento = None
+    col_senha = None
+
+    for h in headers_normalizados:
+        if h.startswith("cod"):
+            col_codigo = h
+        elif "razao" in h:
+            col_razao = h
+        elif h == "cnpj":
+            col_cnpj = h
+        elif "segmento" in h:
+            col_segmento = h
+        elif "senha" in h:
+            col_senha = h
+
+    if not all([col_codigo, col_razao, col_cnpj, col_segmento, col_senha]):
+        raise ValueError(
+            "Colunas obrigatórias não encontradas. Esperado: Código, Razão Social, CNPJ, Segmento, Senha Prefeitura"
+        )
+
+    return col_codigo, col_razao, col_cnpj, col_segmento, col_senha
+
+
+def carregar_empresas_csv(path_csv: str):
     empresas = []
     with open(path_csv, "r", encoding="utf-8-sig", newline="") as f:
         reader = csv.DictReader(f, delimiter=';')
-        headers = [normalizar_header(h) for h in (reader.fieldnames or [])]
-
-        col_codigo = None
-        col_razao = None
-        col_cnpj = None
-        col_segmento = None
-        col_senha = None
-
-        for h in headers:
-            if h.startswith("cód") or h.startswith("cod"):
-                col_codigo = h
-            elif "raz" in h:
-                col_razao = h
-            elif h == "cnpj":
-                col_cnpj = h
-            elif "segmento" in h:
-                col_segmento = h
-            elif "senha" in h:
-                col_senha = h
-
-        if not all([col_codigo, col_razao, col_cnpj, col_segmento, col_senha]):
-            raise ValueError(
-                "Colunas obrigatórias não encontradas no CSV. Esperado: Código, Razão Social, CNPJ, Segmento, Senha Prefeitura"
-            )
+        headers_normalizados = [normalizar_header(h) for h in (reader.fieldnames or [])]
+        col_codigo, col_razao, col_cnpj, col_segmento, col_senha = mapear_colunas(headers_normalizados)
 
         for raw in reader:
             row = {normalizar_header(k): (v or "").strip() for k, v in raw.items()}
@@ -56,6 +64,49 @@ def carregar_empresas(path_csv: str):
                 "senha_prefeitura": row.get(col_senha, ""),
             })
     return empresas
+
+
+def carregar_empresas_xlsx(path_xlsx: str):
+    try:
+        from openpyxl import load_workbook
+    except Exception as e:
+        raise RuntimeError("Para usar .xlsx instale a dependência: pip install openpyxl") from e
+
+    wb = load_workbook(path_xlsx, read_only=True, data_only=True)
+    ws = wb.active
+
+    linhas = ws.iter_rows(values_only=True)
+    header_raw = next(linhas, None)
+    if not header_raw:
+        return []
+
+    header_norm = [normalizar_header(str(h) if h is not None else "") for h in header_raw]
+    col_codigo, col_razao, col_cnpj, col_segmento, col_senha = mapear_colunas(header_norm)
+    idx = {h: i for i, h in enumerate(header_norm)}
+
+    empresas = []
+    for row in linhas:
+        vals = ["" if v is None else str(v).strip() for v in row]
+        cnpj = vals[idx[col_cnpj]] if idx[col_cnpj] < len(vals) else ""
+        if not cnpj:
+            continue
+
+        empresas.append({
+            "codigo": vals[idx[col_codigo]] if idx[col_codigo] < len(vals) else "",
+            "razao_social": vals[idx[col_razao]] if idx[col_razao] < len(vals) else "",
+            "cnpj": cnpj,
+            "segmento": vals[idx[col_segmento]] if idx[col_segmento] < len(vals) else "",
+            "senha_prefeitura": vals[idx[col_senha]] if idx[col_senha] < len(vals) else "",
+        })
+
+    return empresas
+
+
+def carregar_empresas(path_arquivo: str):
+    ext = os.path.splitext(path_arquivo)[1].lower()
+    if ext == ".xlsx":
+        return carregar_empresas_xlsx(path_arquivo)
+    return carregar_empresas_csv(path_arquivo)
 
 
 def executar_empresa(empresa: dict):

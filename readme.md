@@ -189,7 +189,7 @@ O robô possui tratamento de falha e tenta novamente automaticamente.
 
 Para processar várias empresas com captcha manual e relatório final CSV:
 
-1. Prepare `empresas.csv` (separador `;`) com colunas:
+1. Prepare `empresas.xlsx` (recomendado) **ou** `empresas.csv` (separador `;`) com colunas:
    - Código
    - Razão Social
    - CNPJ
@@ -201,6 +201,8 @@ Para processar várias empresas com captcha manual e relatório final CSV:
 ```bash
 python orquestrador_empresas.py
 ```
+
+Opcional: para usar outro arquivo, defina `EMPRESAS_ARQUIVO` (ex.: `empresas.csv`).
 
 3. Para cada empresa, resolva o captcha e navegue até `Nota Fiscal -> Lista Nota Fiscais`.
 
