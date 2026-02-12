@@ -1,0 +1,161 @@
+import csv
+import os
+import subprocess
+import sys
+from datetime import datetime
+
+CSV_EMPRESAS = os.environ.get("EMPRESAS_CSV", "empresas.csv")
+REPORT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "report_execucao_empresas.csv")
+MAX_TENTATIVAS = int(os.environ.get("MAX_TENTATIVAS_EMPRESA", "3"))
+LOGIN_WAIT_SECONDS = int(os.environ.get("LOGIN_WAIT_SECONDS", "120"))
+MSG_CAPTCHA_TIMEOUT = "CAPTCHA_NAO_RESOLVIDO_NO_TEMPO"
+
+
+def normalizar_header(h: str) -> str:
+    return (h or "").strip().lower()
+
+
+def carregar_empresas(path_csv: str):
+    empresas = []
+    with open(path_csv, "r", encoding="utf-8-sig", newline="") as f:
+        reader = csv.DictReader(f, delimiter=';')
+        headers = [normalizar_header(h) for h in (reader.fieldnames or [])]
+
+        col_codigo = None
+        col_razao = None
+        col_cnpj = None
+        col_segmento = None
+        col_senha = None
+
+        for h in headers:
+            if h.startswith("cód") or h.startswith("cod"):
+                col_codigo = h
+            elif "raz" in h:
+                col_razao = h
+            elif h == "cnpj":
+                col_cnpj = h
+            elif "segmento" in h:
+                col_segmento = h
+            elif "senha" in h:
+                col_senha = h
+
+        if not all([col_codigo, col_razao, col_cnpj, col_segmento, col_senha]):
+            raise ValueError(
+                "Colunas obrigatórias não encontradas no CSV. Esperado: Código, Razão Social, CNPJ, Segmento, Senha Prefeitura"
+            )
+
+        for raw in reader:
+            row = {normalizar_header(k): (v or "").strip() for k, v in raw.items()}
+            if not row.get(col_cnpj):
+                continue
+            empresas.append({
+                "codigo": row.get(col_codigo, ""),
+                "razao_social": row.get(col_razao, ""),
+                "cnpj": row.get(col_cnpj, ""),
+                "segmento": row.get(col_segmento, ""),
+                "senha_prefeitura": row.get(col_senha, ""),
+            })
+    return empresas
+
+
+def executar_empresa(empresa: dict):
+    inicio = datetime.now()
+    ultimo_motivo = ""
+
+    for tentativa in range(1, MAX_TENTATIVAS + 1):
+        print("\n" + "=" * 80)
+        print(f"Empresa {empresa['codigo']} - {empresa['razao_social']}")
+        print(f"CNPJ: {empresa['cnpj']} | Segmento: {empresa['segmento']}")
+        print(f"Senha prefeitura (referência): {empresa['senha_prefeitura']}")
+        print(f"Tentativa {tentativa}/{MAX_TENTATIVAS}")
+        print(
+            f"Ação humana: resolver captcha e navegar até 'Nota Fiscal > Lista Nota Fiscais' em até {LOGIN_WAIT_SECONDS}s."
+        )
+
+        env = os.environ.copy()
+        env["LOGIN_WAIT_SECONDS"] = str(LOGIN_WAIT_SECONDS)
+        env["STRICT_LISTA_INICIAL"] = "1"
+        env["EMPRESA_PASTA_FORCADA"] = empresa["razao_social"]
+
+        proc = subprocess.run(
+            [sys.executable, "main.py"],
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+
+        output = (proc.stdout or "") + "\n" + (proc.stderr or "")
+        if proc.returncode == 0:
+            return {
+                "status": "SUCESSO",
+                "motivo": "OK",
+                "tentativas": tentativa,
+                "inicio": inicio,
+                "fim": datetime.now(),
+            }
+
+        if MSG_CAPTCHA_TIMEOUT in output:
+            ultimo_motivo = "Captcha não resolvido a tempo"
+        else:
+            ultimo_motivo = f"Falha execução (exit={proc.returncode})"
+
+        print(f"Falha tentativa {tentativa}: {ultimo_motivo}")
+
+    return {
+        "status": "FALHA",
+        "motivo": ultimo_motivo or "Falha desconhecida",
+        "tentativas": MAX_TENTATIVAS,
+        "inicio": inicio,
+        "fim": datetime.now(),
+    }
+
+
+def salvar_report(rows):
+    header = [
+        "timestamp_inicio",
+        "timestamp_fim",
+        "codigo_empresa",
+        "razao_social",
+        "cnpj",
+        "segmento",
+        "status",
+        "motivo",
+        "tentativas",
+    ]
+    with open(REPORT_PATH, "w", newline="", encoding="utf-8-sig") as f:
+        w = csv.writer(f, delimiter=';')
+        w.writerow(header)
+        for r in rows:
+            w.writerow([
+                r["inicio"].strftime("%Y-%m-%d %H:%M:%S"),
+                r["fim"].strftime("%Y-%m-%d %H:%M:%S"),
+                r["empresa"]["codigo"],
+                r["empresa"]["razao_social"],
+                r["empresa"]["cnpj"],
+                r["empresa"]["segmento"],
+                r["resultado"]["status"],
+                r["resultado"]["motivo"],
+                r["resultado"]["tentativas"],
+            ])
+
+
+def main():
+    empresas = carregar_empresas(CSV_EMPRESAS)
+    print(f"Empresas carregadas: {len(empresas)}")
+
+    resultados = []
+    for empresa in empresas:
+        res = executar_empresa(empresa)
+        resultados.append({"empresa": empresa, "resultado": res, "inicio": res["inicio"], "fim": res["fim"]})
+
+    salvar_report(resultados)
+    total = len(resultados)
+    ok = sum(1 for r in resultados if r["resultado"]["status"] == "SUCESSO")
+    falha = total - ok
+    print("\n" + "=" * 80)
+    print(f"Processamento finalizado. Total={total} | Sucesso={ok} | Falha={falha}")
+    print(f"Report: {REPORT_PATH}")
+
+
+if __name__ == "__main__":
+    main()

@@ -182,3 +182,27 @@ O robô possui tratamento de falha e tenta novamente automaticamente.
 
 
 
+
+
+
+## Execução em lote (semi-automático)
+
+Para processar várias empresas com captcha manual e relatório final CSV:
+
+1. Prepare `empresas.csv` (separador `;`) com colunas:
+   - Código
+   - Razão Social
+   - CNPJ
+   - Segmento
+   - Senha Prefeitura
+
+2. Execute:
+
+```bash
+python orquestrador_empresas.py
+```
+
+3. Para cada empresa, resolva o captcha e navegue até `Nota Fiscal -> Lista Nota Fiscais`.
+
+4. O relatório consolidado será gerado na raiz:
+   - `report_execucao_empresas.csv`

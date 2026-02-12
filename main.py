@@ -32,7 +32,7 @@ LOG_FILENAME = "log_downloads_nfse.csv"
 
 # Se quiser travar a empresa SEM depender do texto do site, descomente:
 # EMPRESA_PASTA_FORCADA = "H2_IMOBILIARIA"
-EMPRESA_PASTA_FORCADA = ""
+EMPRESA_PASTA_FORCADA = os.environ.get("EMPRESA_PASTA_FORCADA", "")
 
 # Competência alvo: por padrão, mês anterior ao mês atual (apuração).
 # Pode sobrescrever com APURACAO_REFERENCIA=MM/AAAA (ex.: 03/2026 -> alvo 02/2026).
@@ -42,6 +42,8 @@ PARAR_PROCESSAMENTO = False
 ENCONTROU_MES_ALVO = False
 CONT_FORA_APOS_ALVO = 0
 LIMITE_HEURISTICA_FORA_ALVO = 20
+STRICT_LISTA_INICIAL = os.environ.get("STRICT_LISTA_INICIAL", "0").strip() == "1"
+MSG_CAPTCHA_TIMEOUT = "CAPTCHA_NAO_RESOLVIDO_NO_TEMPO"
 
 # =====================
 # CHROME – PERFIL EXCLUSIVO
@@ -772,6 +774,8 @@ def main():
     try:
         esperar_lista(timeout=20)
     except TimeoutException:
+        if STRICT_LISTA_INICIAL:
+            raise RuntimeError(MSG_CAPTCHA_TIMEOUT)
         print("Aviso: lista inicial nao carregou em 20s; seguindo com tentativas por item.")
 
     ano_alvo, mes_alvo = calcular_mes_alvo(APURACAO_REFERENCIA)
