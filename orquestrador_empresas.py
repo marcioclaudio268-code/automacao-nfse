@@ -12,6 +12,7 @@ MAX_TENTATIVAS = int(os.environ.get("MAX_TENTATIVAS_EMPRESA", "3"))
 LOGIN_WAIT_SECONDS = int(os.environ.get("LOGIN_WAIT_SECONDS", "120"))
 MSG_CAPTCHA_TIMEOUT = "CAPTCHA_NAO_RESOLVIDO_NO_TEMPO"
 EXIT_CODE_CAPTCHA_TIMEOUT = 30
+EXIT_CODE_SEM_COMPETENCIA = 40
 
 
 def normalizar_header(h: str) -> str:
@@ -167,6 +168,15 @@ def executar_empresa(empresa: dict):
                 "fim": datetime.now(),
             }
 
+        if proc.returncode == EXIT_CODE_SEM_COMPETENCIA:
+            return {
+                "status": "SUCESSO_SEM_COMPETENCIA",
+                "motivo": "Sem notas na competência alvo",
+                "tentativas": tentativa,
+                "inicio": inicio,
+                "fim": datetime.now(),
+            }
+
         if proc.returncode == EXIT_CODE_CAPTCHA_TIMEOUT:
             ultimo_motivo = "Captcha não resolvido a tempo"
         else:
@@ -223,7 +233,7 @@ def main():
 
     salvar_report(resultados)
     total = len(resultados)
-    ok = sum(1 for r in resultados if r["resultado"]["status"] == "SUCESSO")
+    ok = sum(1 for r in resultados if r["resultado"]["status"] in {"SUCESSO", "SUCESSO_SEM_COMPETENCIA"})
     falha = total - ok
     print("\n" + "=" * 80)
     print(f"Processamento finalizado. Total={total} | Sucesso={ok} | Falha={falha}")

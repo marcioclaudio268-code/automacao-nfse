@@ -214,3 +214,4 @@ Opcional: para reduzir/aumentar parada por notas antigas fora da competência, u
 
 4. O relatório consolidado será gerado na raiz:
    - `report_execucao_empresas.csv`
+   - quando não houver notas da competência alvo, o status registrado será `SUCESSO_SEM_COMPETENCIA` (sem retries desnecessários).

@@ -42,10 +42,14 @@ APURACAO_REFERENCIA = os.environ.get("APURACAO_REFERENCIA", "").strip()
 PARAR_PROCESSAMENTO = False
 ENCONTROU_MES_ALVO = False
 CONT_FORA_APOS_ALVO = 0
+CONT_FORA_ANTES_ALVO = 0
+SEM_COMPETENCIA_NA_EMPRESA = False
 LIMITE_HEURISTICA_FORA_ALVO = int(os.environ.get("LIMITE_HEURISTICA_FORA_ALVO", "2"))
 STRICT_LISTA_INICIAL = os.environ.get("STRICT_LISTA_INICIAL", "0").strip() == "1"
 MSG_CAPTCHA_TIMEOUT = "CAPTCHA_NAO_RESOLVIDO_NO_TEMPO"
+MSG_SEM_COMPETENCIA = "SUCESSO_SEM_COMPETENCIA"
 EXIT_CODE_CAPTCHA_TIMEOUT = 30
+EXIT_CODE_SEM_COMPETENCIA = 40
 
 AUTO_LOGIN_PREFEITURA = os.environ.get("AUTO_LOGIN_PREFEITURA", "0").strip() == "1"
 LOGIN_URL_PREFEITURA = os.environ.get(
@@ -664,7 +668,7 @@ def ir_para_proxima_pagina():
 # PROCESSAR UMA NOTA (sem falso 502)
 # =====================
 def processar_nota_por_indice(i, ano_alvo, mes_alvo):
-    global PARAR_PROCESSAMENTO, ENCONTROU_MES_ALVO, CONT_FORA_APOS_ALVO
+    global PARAR_PROCESSAMENTO, ENCONTROU_MES_ALVO, CONT_FORA_APOS_ALVO, CONT_FORA_ANTES_ALVO, SEM_COMPETENCIA_NA_EMPRESA
 
     tentativa = 0
     while tentativa < MAX_RETRIES_POR_NOTA:
@@ -723,6 +727,7 @@ def processar_nota_por_indice(i, ano_alvo, mes_alvo):
                 return True
 
             if comp == 1:
+                CONT_FORA_ANTES_ALVO = 0
                 msg = f"Nota mais nova que mês alvo {mes_alvo:02d}/{ano_alvo}"
                 print(f"[{i+1}] SKIP COMPETENCIA (MAIS NOVA) -> NF={info.get('nf')} DATA={info.get('data_emissao')}")
                 try:
@@ -747,11 +752,21 @@ def processar_nota_por_indice(i, ano_alvo, mes_alvo):
                             f"apos encontrar o mês alvo. Encerrando processo."
                         )
                         PARAR_PROCESSAMENTO = True
+                else:
+                    CONT_FORA_ANTES_ALVO += 1
+                    if CONT_FORA_ANTES_ALVO >= LIMITE_HEURISTICA_FORA_ALVO:
+                        print(
+                            f"Heuristica acionada: {CONT_FORA_ANTES_ALVO} notas antigas consecutivas "
+                            f"antes de encontrar o mês alvo. Encerrando empresa como sem competência."
+                        )
+                        SEM_COMPETENCIA_NA_EMPRESA = True
+                        PARAR_PROCESSAMENTO = True
                 return True
 
             # comp == 0 (mês alvo)
             ENCONTROU_MES_ALVO = True
             CONT_FORA_APOS_ALVO = 0
+            CONT_FORA_ANTES_ALVO = 0
 
             print(f"[{i+1}] Tentativa {tentativa}/{MAX_RETRIES_POR_NOTA} -> NF={info.get('nf')} RPS={info.get('rps')} DATA={info.get('data_emissao')}")
 
@@ -853,7 +868,7 @@ def processar_nota_por_indice(i, ano_alvo, mes_alvo):
 # MAIN
 # =====================
 def main():
-    global PARAR_PROCESSAMENTO, ENCONTROU_MES_ALVO, CONT_FORA_APOS_ALVO
+    global PARAR_PROCESSAMENTO, ENCONTROU_MES_ALVO, CONT_FORA_APOS_ALVO, CONT_FORA_ANTES_ALVO, SEM_COMPETENCIA_NA_EMPRESA
 
     preencher_login_prefeitura_se_habilitado()
 
@@ -867,9 +882,11 @@ def main():
     ano_alvo, mes_alvo = calcular_mes_alvo(APURACAO_REFERENCIA)
     ENCONTROU_MES_ALVO = False
     CONT_FORA_APOS_ALVO = 0
+    CONT_FORA_ANTES_ALVO = 0
+    SEM_COMPETENCIA_NA_EMPRESA = False
     PARAR_PROCESSAMENTO = False
     print(f"Mes alvo de download: {mes_alvo:02d}/{ano_alvo}")
-    print(f"Heuristica de parada: {LIMITE_HEURISTICA_FORA_ALVO} notas antigas consecutivas apos o mês alvo.")
+    print(f"Heuristica de parada: {LIMITE_HEURISTICA_FORA_ALVO} notas antigas consecutivas (antes ou apos mês alvo).")
 
     definir_page_size(100)
 
@@ -898,6 +915,9 @@ def main():
             break
         pagina += 1
 
+    if SEM_COMPETENCIA_NA_EMPRESA:
+        raise RuntimeError(MSG_SEM_COMPETENCIA)
+
     print("Processo finalizado.")
     sleep(2)
 
@@ -909,6 +929,8 @@ except RuntimeError as e:
     print(msg)
     if MSG_CAPTCHA_TIMEOUT in msg:
         sys.exit(EXIT_CODE_CAPTCHA_TIMEOUT)
+    if MSG_SEM_COMPETENCIA in msg:
+        sys.exit(EXIT_CODE_SEM_COMPETENCIA)
     raise
 finally:
     driver.quit()
