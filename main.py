@@ -12,6 +12,8 @@ from selenium.common.exceptions import (
 )
 from time import sleep
 import os, time, re, csv, tempfile
+import threading
+import sys
 from datetime import datetime
 import xml.etree.ElementTree as ET
 import shutil
@@ -44,6 +46,17 @@ CONT_FORA_APOS_ALVO = 0
 LIMITE_HEURISTICA_FORA_ALVO = 20
 STRICT_LISTA_INICIAL = os.environ.get("STRICT_LISTA_INICIAL", "0").strip() == "1"
 MSG_CAPTCHA_TIMEOUT = "CAPTCHA_NAO_RESOLVIDO_NO_TEMPO"
+EXIT_CODE_CAPTCHA_TIMEOUT = 30
+
+AUTO_LOGIN_PREFEITURA = os.environ.get("AUTO_LOGIN_PREFEITURA", "0").strip() == "1"
+LOGIN_URL_PREFEITURA = os.environ.get(
+    "LOGIN_URL_PREFEITURA",
+    "https://tributario.bauru.sp.gov.br/loginCNPJContribuinte.jsp?execobj=ContribuintesWebRelacionados",
+).strip()
+LOGIN_CAMPO_USUARIO = os.environ.get("LOGIN_CAMPO_USUARIO", "usuario").strip()
+LOGIN_CAMPO_SENHA = os.environ.get("LOGIN_CAMPO_SENHA", "senha").strip()
+LOGIN_BOTAO_ENTRAR = os.environ.get("LOGIN_BOTAO_ENTRAR", "btnEntrar").strip()
+LOGIN_CARD_DASHBOARD = os.environ.get("LOGIN_CARD_DASHBOARD", "divtxtnotafiscal").strip()
 
 # =====================
 # CHROME – PERFIL EXCLUSIVO
@@ -71,10 +84,68 @@ driver = webdriver.Chrome(options=options)
 wait = WebDriverWait(driver, 30)
 
 print("Chrome iniciado.")
-print("Entre manualmente em: Nota Fiscal - Lista Nota Fiscais")
-login_wait_seconds = int(os.environ.get("LOGIN_WAIT_SECONDS", "40"))
-print(f"Voce tem {login_wait_seconds} segundos.")
-sleep(login_wait_seconds)
+login_wait_seconds = int(os.environ.get("LOGIN_WAIT_SECONDS", "120"))
+
+
+def aguardar_enter_ou_timeout(segundos):
+    """Aguarda ENTER no terminal; retorna False em timeout/EOF."""
+    terminou = threading.Event()
+
+    def _worker():
+        try:
+            input()
+            terminou.set()
+        except Exception:
+            # stdin indisponível/fechado
+            pass
+
+    t = threading.Thread(target=_worker, daemon=True)
+    t.start()
+    t.join(segundos)
+    return terminou.is_set()
+
+
+def preencher_login_prefeitura_se_habilitado():
+    if not AUTO_LOGIN_PREFEITURA:
+        return
+
+    cnpj = re.sub(r"\D", "", os.environ.get("EMPRESA_CNPJ", ""))
+    senha = os.environ.get("EMPRESA_SENHA", "")
+    if not cnpj or not senha:
+        raise RuntimeError("AUTO_LOGIN_PREFEITURA ativo, mas EMPRESA_CNPJ/EMPRESA_SENHA não informados")
+
+    driver.get(LOGIN_URL_PREFEITURA)
+    campo_usuario = wait.until(EC.presence_of_element_located((By.ID, LOGIN_CAMPO_USUARIO)))
+    campo_senha = wait.until(EC.presence_of_element_located((By.ID, LOGIN_CAMPO_SENHA)))
+
+    campo_usuario.clear()
+    campo_usuario.send_keys(cnpj)
+    campo_senha.clear()
+    campo_senha.send_keys(senha)
+
+    btn = wait.until(EC.element_to_be_clickable((By.ID, LOGIN_BOTAO_ENTRAR)))
+    click_robusto(btn)
+
+    print("Login preenchido automaticamente. Resolva o captcha no navegador.")
+    print(f"Após resolver, pressione ENTER no terminal (timeout {login_wait_seconds}s).")
+    if not aguardar_enter_ou_timeout(login_wait_seconds):
+        raise RuntimeError(MSG_CAPTCHA_TIMEOUT)
+
+    try:
+        WebDriverWait(driver, 15).until(EC.presence_of_element_located((By.ID, LOGIN_CARD_DASHBOARD)))
+    except TimeoutException:
+        raise RuntimeError("LOGIN_NAO_CONFIRMADO_APOS_CAPTCHA")
+
+    print("Login confirmado. Navegue para: Nota Fiscal > Lista Nota Fiscais.")
+    print(f"Pressione ENTER quando estiver na lista (timeout {login_wait_seconds}s).")
+    if not aguardar_enter_ou_timeout(login_wait_seconds):
+        raise RuntimeError(MSG_CAPTCHA_TIMEOUT)
+
+
+if not AUTO_LOGIN_PREFEITURA:
+    print("Entre manualmente em: Nota Fiscal - Lista Nota Fiscais")
+    print(f"Você tem {login_wait_seconds} segundos (ou pressione ENTER para seguir).")
+    aguardar_enter_ou_timeout(login_wait_seconds)
 
 # =====================
 # HELPERS – CLIQUE / LISTA / 502
@@ -771,6 +842,8 @@ def processar_nota_por_indice(i, ano_alvo, mes_alvo):
 def main():
     global PARAR_PROCESSAMENTO, ENCONTROU_MES_ALVO, CONT_FORA_APOS_ALVO
 
+    preencher_login_prefeitura_se_habilitado()
+
     try:
         esperar_lista(timeout=20)
     except TimeoutException:
@@ -818,5 +891,11 @@ def main():
 
 try:
     main()
+except RuntimeError as e:
+    msg = str(e)
+    print(msg)
+    if MSG_CAPTCHA_TIMEOUT in msg:
+        sys.exit(EXIT_CODE_CAPTCHA_TIMEOUT)
+    raise
 finally:
     driver.quit()

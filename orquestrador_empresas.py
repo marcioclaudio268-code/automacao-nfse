@@ -3,6 +3,7 @@ import os
 import subprocess
 import sys
 import unicodedata
+import re
 from datetime import datetime
 
 CSV_EMPRESAS = os.environ.get("EMPRESAS_ARQUIVO", os.environ.get("EMPRESAS_CSV", "empresas.xlsx"))
@@ -10,6 +11,7 @@ REPORT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "report_e
 MAX_TENTATIVAS = int(os.environ.get("MAX_TENTATIVAS_EMPRESA", "3"))
 LOGIN_WAIT_SECONDS = int(os.environ.get("LOGIN_WAIT_SECONDS", "120"))
 MSG_CAPTCHA_TIMEOUT = "CAPTCHA_NAO_RESOLVIDO_NO_TEMPO"
+EXIT_CODE_CAPTCHA_TIMEOUT = 30
 
 
 def normalizar_header(h: str) -> str:
@@ -140,22 +142,22 @@ def executar_empresa(empresa: dict):
         print(f"Senha prefeitura (referência): {empresa['senha_prefeitura']}")
         print(f"Tentativa {tentativa}/{MAX_TENTATIVAS}")
         print(
-            f"Ação humana: resolver captcha e navegar até 'Nota Fiscal > Lista Nota Fiscais' em até {LOGIN_WAIT_SECONDS}s."
+            f"Etapa 1: login automático (CNPJ/senha) + captcha humano. Tempo por etapa: {LOGIN_WAIT_SECONDS}s."
         )
 
         env = os.environ.copy()
         env["LOGIN_WAIT_SECONDS"] = str(LOGIN_WAIT_SECONDS)
         env["STRICT_LISTA_INICIAL"] = "1"
         env["EMPRESA_PASTA_FORCADA"] = empresa["razao_social"]
+        env["AUTO_LOGIN_PREFEITURA"] = "1"
+        env["EMPRESA_CNPJ"] = re.sub(r"\D", "", empresa["cnpj"])
+        env["EMPRESA_SENHA"] = empresa["senha_prefeitura"]
 
         proc = subprocess.run(
             [sys.executable, "main.py"],
-            capture_output=True,
-            text=True,
             env=env,
         )
 
-        output = (proc.stdout or "") + "\n" + (proc.stderr or "")
         if proc.returncode == 0:
             return {
                 "status": "SUCESSO",
@@ -165,7 +167,7 @@ def executar_empresa(empresa: dict):
                 "fim": datetime.now(),
             }
 
-        if MSG_CAPTCHA_TIMEOUT in output:
+        if proc.returncode == EXIT_CODE_CAPTCHA_TIMEOUT:
             ultimo_motivo = "Captcha não resolvido a tempo"
         else:
             ultimo_motivo = f"Falha execução (exit={proc.returncode})"
