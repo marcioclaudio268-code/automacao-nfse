@@ -208,7 +208,7 @@ Opcional: para usar outro arquivo, defina `EMPRESAS_ARQUIVO` (ex.: `empresas.csv
    - o robô abre a URL de login da prefeitura;
    - preenche CNPJ/senha automaticamente;
    - você resolve o captcha e clica em `Entrar` manualmente;
-   - após o login, o robô navega automaticamente para `Nota Fiscal -> Lista Nota Fiscais`.
+   - após o login, o robô clica em `Nota Fiscal` e no segundo dashboard clica em `Lista Nota Fiscais` automaticamente.
 
 4. O relatório consolidado será gerado na raiz:
    - `report_execucao_empresas.csv`

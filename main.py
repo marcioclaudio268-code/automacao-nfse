@@ -56,6 +56,7 @@ LOGIN_CAMPO_USUARIO = os.environ.get("LOGIN_CAMPO_USUARIO", "usuario").strip()
 LOGIN_CAMPO_SENHA = os.environ.get("LOGIN_CAMPO_SENHA", "senha").strip()
 LOGIN_BOTAO_ENTRAR = os.environ.get("LOGIN_BOTAO_ENTRAR", "btnEntrar").strip()
 LOGIN_CARD_DASHBOARD = os.environ.get("LOGIN_CARD_DASHBOARD", "divtxtnotafiscal").strip()
+LOGIN_CARD_LISTA_NOTAS = os.environ.get("LOGIN_CARD_LISTA_NOTAS", "divtxtlistanf").strip()
 
 # =====================
 # CHROME – PERFIL EXCLUSIVO
@@ -135,22 +136,33 @@ def click_robusto(el):
 def navegar_para_lista_nota_fiscal():
     print("Login confirmado. Navegando automaticamente: Nota Fiscal -> Lista Nota Fiscais...")
 
+    # 1) Dashboard inicial: clicar em Nota Fiscal.
     card_nf = wait.until(EC.element_to_be_clickable((By.ID, LOGIN_CARD_DASHBOARD)))
     click_robusto(card_nf)
 
+    # 2) Segundo dashboard: clicar no card Lista Nota Fiscais (id confirmado pelo escritório).
+    try:
+        card_lista = WebDriverWait(driver, 12).until(EC.element_to_be_clickable((By.ID, LOGIN_CARD_LISTA_NOTAS)))
+        click_robusto(card_lista)
+        esperar_lista(timeout=WAIT_LISTA_TIMEOUT)
+        print("Tela de lista de notas carregada automaticamente.")
+        return
+    except Exception as e:
+        ultimo_erro = e
+
+    # Fallback por texto para maior resiliência se o id variar.
     seletores_lista = [
         (By.XPATH, "//a[contains(normalize-space(.), 'Lista Nota Fiscais')]"),
         (By.XPATH, "//span[contains(normalize-space(.), 'Lista Nota Fiscais')]"),
         (By.XPATH, "//*[contains(normalize-space(.), 'Lista Nota Fiscais')]"),
     ]
 
-    ultimo_erro = None
     for by, sel in seletores_lista:
         try:
             el = WebDriverWait(driver, 8).until(EC.element_to_be_clickable((by, sel)))
             click_robusto(el)
             esperar_lista(timeout=WAIT_LISTA_TIMEOUT)
-            print("Tela de lista de notas carregada automaticamente.")
+            print("Tela de lista de notas carregada automaticamente (fallback por texto).")
             return
         except Exception as e:
             ultimo_erro = e
