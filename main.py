@@ -178,6 +178,26 @@ def esperar_lista(timeout=WAIT_LISTA_TIMEOUT):
         EC.presence_of_all_elements_located((By.NAME, "gridListaCheck"))
     )
 
+def esperar_lista_ou_sem_checkbox(timeout=WAIT_LISTA_TIMEOUT):
+    """
+    Aguarda a tela de lista ficar pronta e classifica:
+      - "checkboxes": há notas selecionáveis
+      - "sem_checkbox": lista carregada, mas sem checkboxes (encerrar como sem competência)
+    """
+    def cond(_):
+        checks = driver.find_elements(By.NAME, "gridListaCheck")
+        if len(checks) > 0:
+            return "checkboxes"
+
+        # Indicador de que a tela da lista está carregada mesmo sem checkboxes.
+        has_pagesize = len(driver.find_elements(By.ID, "gridListaPageSize")) > 0
+        if has_pagesize:
+            return "sem_checkbox"
+
+        return False
+
+    return WebDriverWait(driver, timeout).until(cond)
+
 def lista_ativa():
     try:
         return len(driver.find_elements(By.NAME, "gridListaCheck")) > 0
@@ -873,7 +893,9 @@ def main():
     preencher_login_prefeitura_se_habilitado()
 
     try:
-        esperar_lista(timeout=20)
+        status_lista = esperar_lista_ou_sem_checkbox(timeout=20)
+        if status_lista == "sem_checkbox":
+            raise RuntimeError(MSG_SEM_COMPETENCIA)
     except TimeoutException:
         if STRICT_LISTA_INICIAL:
             raise RuntimeError(MSG_CAPTCHA_TIMEOUT)
@@ -894,6 +916,11 @@ def main():
     while True:
         total = len(driver.find_elements(By.NAME, "gridListaCheck"))
         print(f"Pagina {pagina}: {total} notas encontradas.")
+
+        if total == 0 and not ENCONTROU_MES_ALVO:
+            SEM_COMPETENCIA_NA_EMPRESA = True
+            print("Lista carregada sem checkboxes; encerrando empresa como sem competência.")
+            break
 
         i = 0
         while True:
