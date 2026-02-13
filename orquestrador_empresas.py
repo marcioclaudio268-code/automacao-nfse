@@ -6,6 +6,7 @@ import unicodedata
 import re
 import json
 from datetime import datetime
+from time import sleep
 
 CSV_EMPRESAS = os.environ.get("EMPRESAS_ARQUIVO", os.environ.get("EMPRESAS_CSV", "empresas.xlsx"))
 REPORT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "report_execucao_empresas.csv")

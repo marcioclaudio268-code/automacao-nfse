@@ -1,5 +1,4 @@
 ﻿timestamp;status;chave_unica;nf;data_emissao;rps;chave;id_interno;arquivo_xml;pasta_xml;mensagem
-2026-02-13 13:01:59;SKIP_FORA_COMPETENCIA;49999;manual;10/02/2026;67;49999;52016036;;;Nota mais nova que mes alvo 01/2026
-2026-02-13 13:02:03;OK;49999;manual;07/01/2026;66;49999;51261352;NFS_manual_2026-01-07.xml;c:\Users\Windows 11\Desktop\NFS XML\automacao-nfse\downloads\B_REPRESENTACOES\01.2026;OK (download confirmado por arquivo)
-2026-02-13 13:02:05;SKIP_FORA_COMPETENCIA;ID:50835098;manual;10/12/2025;;;50835098;;;Nota mais antiga que mes alvo 01/2026
-2026-02-13 13:09:39;SKIP_FORA_COMPETENCIA;ID:50835098;manual;10/12/2025;;;50835098;;;Nota mais antiga que mes alvo 01/2026
+2026-02-13 13:49:55;SKIP_FORA_COMPETENCIA;49999;manual;10/02/2026;67;49999;52016036;;;Nota mais nova que mes alvo 01/2026
+2026-02-13 13:49:59;OK;49999;manual;07/01/2026;66;49999;51261352;NFS_manual_2026-01-07.xml;c:\Users\Windows 11\Desktop\NFS XML\automacao-nfse\downloads\B_REPRESENTACOES\01.2026;OK (download confirmado por arquivo)
+2026-02-13 13:50:01;SKIP_FORA_COMPETENCIA;ID:50835098;manual;10/12/2025;;;50835098;;;Nota mais antiga que mes alvo 01/2026

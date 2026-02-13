@@ -1,0 +1,5 @@
+﻿timestamp;status;chave_unica;nf;data_emissao;rps;chave;id_interno;arquivo_xml;pasta_xml;mensagem
+2026-02-13 13:53:03;SKIP_FORA_COMPETENCIA;49999;manual;09/02/2026;61;49999;51983017;;;Nota mais nova que mes alvo 01/2026
+2026-02-13 13:53:04;SKIP_FORA_COMPETENCIA;49999;manual;05/02/2026;60;49999;51808662;;;Nota mais nova que mes alvo 01/2026
+2026-02-13 13:53:08;OK;49999;manual;07/01/2026;59;49999;51266488;NFS_manual_2026-01-07.xml;c:\Users\Windows 11\Desktop\NFS XML\automacao-nfse\downloads\ALEJANDRA_DVZ\01.2026;OK (download confirmado por arquivo)
+2026-02-13 13:53:10;SKIP_FORA_COMPETENCIA;ID:50739384;manual;03/12/2025;;;50739384;;;Nota mais antiga que mes alvo 01/2026

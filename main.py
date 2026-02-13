@@ -104,6 +104,7 @@ login_wait_seconds = int(os.environ.get("LOGIN_WAIT_SECONDS", "120"))
 
 
 def verificar_modulo_nfse_existe():
+    """Verifica se o módulo Nota Fiscal existe no dashboard."""
     try:
         WebDriverWait(driver, 5).until(
             EC.presence_of_element_located((By.ID, "imgnotafiscal"))
@@ -135,6 +136,7 @@ def verificar_modulo_nfse_existe():
 
 
 def preencher_login_prefeitura_se_habilitado():
+    """Login com detecção de sessão ativa"""
     if not AUTO_LOGIN_PREFEITURA:
         return
 
@@ -144,26 +146,86 @@ def preencher_login_prefeitura_se_habilitado():
         raise RuntimeError("AUTO_LOGIN_PREFEITURA ativo, mas EMPRESA_CNPJ/EMPRESA_SENHA nao informados")
 
     driver.get(LOGIN_URL_PREFEITURA)
-    campo_usuario = wait.until(EC.presence_of_element_located((By.ID, LOGIN_CAMPO_USUARIO)))
-    campo_senha = wait.until(EC.presence_of_element_located((By.ID, LOGIN_CAMPO_SENHA)))
-
-    campo_usuario.clear()
-    campo_usuario.send_keys(cnpj)
-    campo_senha.clear()
-    campo_senha.send_keys(senha)
-
-    wait.until(EC.element_to_be_clickable((By.ID, LOGIN_BOTAO_ENTRAR)))
-
-    print("CNPJ e senha preenchidos. Resolva o captcha e clique em 'Entrar' manualmente.")
-    print(f"Aguardando dashboard por ate {login_wait_seconds}s...")
+    sleep(2)
 
     try:
-        WebDriverWait(driver, login_wait_seconds).until(
-            lambda d: len(d.find_elements(By.CSS_SELECTOR, "img[id^='img']")) > 0
+        elementos_dashboard = driver.find_elements(By.CSS_SELECTOR, "img[id^='img']")
+        
+        if len(elementos_dashboard) > 0:
+            print("=" * 80)
+            print("SESSAO ANTERIOR DETECTADA")
+            print("=" * 80)
+            print("Usuario ja esta logado no sistema.")
+            print("Pulando etapa de login e navegando direto para modulo NFSe...")
+            print("=" * 80)
+            
+            print("Verificando se empresa possui modulo de Nota Fiscal...")
+            if not verificar_modulo_nfse_existe():
+                print("=" * 80)
+                print("MODULO NOTA FISCAL NAO ENCONTRADO")
+                print("=" * 80)
+                print("Empresa nao possui modulo de NFSe (nao presta servicos).")
+                print("Encerrando como SUCESSO SEM COMPETENCIA.")
+                print("=" * 80)
+                
+                try:
+                    log_p = log_path_empresa()
+                    garantir_log_com_header(log_p)
+                    with open(log_p, "a", newline="", encoding="utf-8-sig") as f:
+                        writer = csv.writer(f, delimiter=";")
+                        writer.writerow([
+                            datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                            "SEM_MODULO_NFSE",
+                            "", "", "", "", "", "", "", "",
+                            "Empresa sem modulo Nota Fiscal (nao presta servicos)"
+                        ])
+                    print(f"Registro salvo no log: {log_p}")
+                except Exception as e:
+                    print(f"Erro ao salvar log: {e}")
+                
+                raise RuntimeError(MSG_SEM_COMPETENCIA)
+
+            print("Modulo Nota Fiscal encontrado. Navegando para lista...")
+            navegar_para_lista_nota_fiscal()
+            return
+            
+    except Exception as e:
+        print(f"[DEBUG] Nao detectou dashboard, prosseguindo com login: {e}")
+
+    print("Tela de login detectada. Preenchendo credenciais...")
+    
+    try:
+        campo_usuario = WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.ID, LOGIN_CAMPO_USUARIO))
         )
-        print("Dashboard carregado.")
+        campo_senha = WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.ID, LOGIN_CAMPO_SENHA))
+        )
+
+        campo_usuario.clear()
+        campo_usuario.send_keys(cnpj)
+        campo_senha.clear()
+        campo_senha.send_keys(senha)
+
+        wait.until(EC.element_to_be_clickable((By.ID, LOGIN_BOTAO_ENTRAR)))
+
+        print("CNPJ e senha preenchidos. Resolva o captcha e clique em 'Entrar' manualmente.")
+        print(f"Aguardando dashboard por ate {login_wait_seconds}s...")
+
+        try:
+            WebDriverWait(driver, login_wait_seconds).until(
+                lambda d: len(d.find_elements(By.CSS_SELECTOR, "img[id^='img']")) > 0
+            )
+            print("Dashboard carregado.")
+        except TimeoutException:
+            raise RuntimeError(MSG_CAPTCHA_TIMEOUT)
+
     except TimeoutException:
-        raise RuntimeError(MSG_CAPTCHA_TIMEOUT)
+        print("[AVISO] Campo de login nao encontrado. Verificando se ja esta no dashboard...")
+        
+        elementos_dashboard = driver.find_elements(By.CSS_SELECTOR, "img[id^='img']")
+        if len(elementos_dashboard) == 0:
+            raise RuntimeError("Nao foi possivel detectar tela de login nem dashboard.")
 
     print("Verificando se empresa possui modulo de Nota Fiscal...")
     if not verificar_modulo_nfse_existe():
@@ -279,7 +341,7 @@ def esperar_lista_ou_sem_checkbox(timeout=WAIT_LISTA_TIMEOUT):
 
         radios_linha = driver.find_elements(By.NAME, "gridListaSelected")
         celulas_linha = driver.find_elements(By.CSS_SELECTOR, "td[id*=',-1_gridLista']")
-        datas = driver.find_elements(By.CSS_SELECTOR, "td[id*=',11_gridLista']")  # ← CORRIGIDO: 10 -> 11
+        datas = driver.find_elements(By.CSS_SELECTOR, "td[id*=',11_gridLista']")
         
         if len(datas) > 0 and len(checks) == 0:
             return "sem_checkbox_com_data"
@@ -381,7 +443,7 @@ def td_text(tr, col):
 
 def primeira_data_emissao_visivel_sem_checkbox():
     try:
-        el = driver.find_element(By.CSS_SELECTOR, "td[id*=',11_gridLista']")  # ← CORRIGIDO: 10 -> 11
+        el = driver.find_element(By.CSS_SELECTOR, "td[id*=',11_gridLista']")
         return (el.text or "").strip()
     except Exception:
         return ""
@@ -392,8 +454,8 @@ def extrair_info_linha(checkbox):
         "id_interno": checkbox.get_attribute("value") or "",
         "nf": td_text(tr, 6),
         "situacao": td_text(tr, 9),
-        "data_emissao": td_text(tr, 11),  # ← CORRIGIDO: 10 -> 11
-        "rps": td_text(tr, 12),            # ← AJUSTADO: 11 -> 12 (RPS também mudou!)
+        "data_emissao": td_text(tr, 11),
+        "rps": td_text(tr, 12),
         "chave": td_text(tr, 14),
     }
 
@@ -737,6 +799,7 @@ def ir_para_proxima_pagina():
 
 
 def verificar_primeira_pagina_tem_mes_alvo(ano_alvo, mes_alvo):
+    """Verifica se primeira página contém notas do mês alvo."""
     print(f"Verificando se primeira pagina contem notas do mes alvo {mes_alvo:02d}/{ano_alvo}...")
     
     try:
@@ -780,21 +843,35 @@ def verificar_primeira_pagina_tem_mes_alvo(ano_alvo, mes_alvo):
         
         print(f"[SAMPLE] Novas: {notas_novas} | No alvo: {notas_no_alvo} | Antigas: {notas_antigas} | Invalidas: {datas_invalidas}")
         
-        if datas_invalidas == sample_size or (notas_antigas > 0 and notas_no_alvo == 0 and notas_novas == 0):
+        # TODAS INVÁLIDAS
+        if datas_invalidas == sample_size:
             print("=" * 80)
-            print("[DETECCAO RAPIDA] Empresa NAO possui notas validas na competencia alvo.")
+            print("[DETECCAO RAPIDA] TODAS as notas tem data INVALIDA.")
             print("Encerrando como SEM COMPETENCIA.")
             print("=" * 80)
             return False
         
+        # TODAS ANTIGAS (sem novas, sem no alvo)
+        if notas_antigas > 0 and notas_no_alvo == 0 and notas_novas == 0:
+            print("=" * 80)
+            print("[DETECCAO RAPIDA] TODAS as notas sao ANTIGAS.")
+            print(f"Empresa NAO possui notas na competencia {mes_alvo:02d}/{ano_alvo}.")
+            print("Encerrando como SEM COMPETENCIA.")
+            print("=" * 80)
+            return False
+        
+        # TEM NOTAS NO ALVO
         if notas_no_alvo > 0:
             print(f"[OK] Encontradas {notas_no_alvo} notas no mes alvo. Processando...")
             return True
         
+        # TEM NOTAS NOVAS (continua buscando)
         if notas_novas > 0:
             print(f"[OK] Encontradas {notas_novas} notas novas. Continuando busca...")
             return True
         
+        # Fallback: continua processando
+        print("[AVISO] Nenhuma categoria definida claramente. Continuando processamento...")
         return True
         
     except Exception as e:
