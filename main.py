@@ -182,14 +182,20 @@ def esperar_lista_ou_sem_checkbox(timeout=WAIT_LISTA_TIMEOUT):
     """
     Aguarda a tela de lista ficar pronta e classifica:
       - "checkboxes": há notas selecionáveis
-      - "sem_checkbox": lista carregada, mas sem checkboxes (encerrar como sem competência)
+      - "sem_checkbox_com_data": lista sem checkbox, mas com data de emissão visível
+      - "sem_checkbox": lista carregada sem checkbox (fallback por page size)
     """
     def cond(_):
         checks = driver.find_elements(By.NAME, "gridListaCheck")
         if len(checks) > 0:
             return "checkboxes"
 
-        # Indicador de que a tela da lista está carregada mesmo sem checkboxes.
+        # Se já existe coluna de data da grid, a lista carregou mesmo sem checkboxes.
+        datas = driver.find_elements(By.CSS_SELECTOR, "td[id*=',10_gridLista']")
+        if len(datas) > 0:
+            return "sem_checkbox_com_data"
+
+        # Fallback: page size presente também indica lista carregada.
         has_pagesize = len(driver.find_elements(By.ID, "gridListaPageSize")) > 0
         if has_pagesize:
             return "sem_checkbox"
@@ -294,6 +300,15 @@ def desmarcar_todas_notas():
 def td_text(tr, col):
     el = tr.find_element(By.CSS_SELECTOR, f"td[id*=',{col}_gridLista']")
     return (el.text or "").strip()
+
+
+def primeira_data_emissao_visivel_sem_checkbox():
+    """Lê a primeira data da coluna Data Emissão quando não há checkbox."""
+    try:
+        el = driver.find_element(By.CSS_SELECTOR, "td[id*=',10_gridLista']")
+        return (el.text or "").strip()
+    except Exception:
+        return ""
 
 def extrair_info_linha(checkbox):
     tr = checkbox.find_element(By.XPATH, "./ancestor::tr[1]")
@@ -892,16 +907,28 @@ def main():
 
     preencher_login_prefeitura_se_habilitado()
 
+    ano_alvo, mes_alvo = calcular_mes_alvo(APURACAO_REFERENCIA)
+
     try:
         status_lista = esperar_lista_ou_sem_checkbox(timeout=20)
-        if status_lista == "sem_checkbox":
+        if status_lista in {"sem_checkbox", "sem_checkbox_com_data"}:
+            data_ref = primeira_data_emissao_visivel_sem_checkbox()
+            comp = comparar_competencia_nota({"data_emissao": data_ref}, ano_alvo, mes_alvo) if data_ref else None
+
+            if comp == -1:
+                print(
+                    f"Sem checkbox e data inicial antiga ({data_ref}) para alvo {mes_alvo:02d}/{ano_alvo}. "
+                    "Encerrando como sem competência."
+                )
+            else:
+                print("Lista carregada sem checkbox; encerrando como sem competência.")
+
             raise RuntimeError(MSG_SEM_COMPETENCIA)
     except TimeoutException:
         if STRICT_LISTA_INICIAL:
             raise RuntimeError(MSG_CAPTCHA_TIMEOUT)
         print("Aviso: lista inicial nao carregou em 20s; seguindo com tentativas por item.")
 
-    ano_alvo, mes_alvo = calcular_mes_alvo(APURACAO_REFERENCIA)
     ENCONTROU_MES_ALVO = False
     CONT_FORA_APOS_ALVO = 0
     CONT_FORA_ANTES_ALVO = 0

@@ -215,4 +215,4 @@ Opcional: para reduzir/aumentar parada por notas antigas fora da competência, u
 4. O relatório consolidado será gerado na raiz:
    - `report_execucao_empresas.csv`
    - quando não houver notas da competência alvo, o status registrado será `SUCESSO_SEM_COMPETENCIA` (sem retries desnecessários).
-   - quando a lista carregar sem checkboxes (empresa sem notas selecionáveis), também finaliza como `SUCESSO_SEM_COMPETENCIA`.
+   - quando a lista carregar sem checkboxes (empresa sem notas selecionáveis), também finaliza como `SUCESSO_SEM_COMPETENCIA`; se a primeira Data Emissão já vier mais antiga que a competência alvo, encerra imediatamente.
