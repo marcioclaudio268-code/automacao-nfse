@@ -1,0 +1,3 @@
+﻿timestamp;status;chave_unica;nf;data_emissao;rps;chave;id_interno;arquivo_xml;pasta_xml;mensagem
+2026-02-13 13:02:40;OK;49999;manual;29/01/2026;73;49999;51557729;NFS_manual_2026-01-29.xml;c:\Users\Windows 11\Desktop\NFS XML\automacao-nfse\downloads\L_G_PEREIRA\01.2026;OK (download confirmado por arquivo)
+2026-02-13 13:02:41;SKIP_FORA_COMPETENCIA;ID:51049243;manual;22/12/2025;;;51049243;;;Nota mais antiga que mes alvo 01/2026
