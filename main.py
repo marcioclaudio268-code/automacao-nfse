@@ -148,8 +148,11 @@ def navegar_para_lista_nota_fiscal():
     try:
         card_lista = WebDriverWait(driver, 12).until(EC.element_to_be_clickable((By.ID, LOGIN_CARD_LISTA_NOTAS)))
         click_robusto(card_lista)
-        esperar_lista(timeout=WAIT_LISTA_TIMEOUT)
-        print("Tela de lista de notas carregada automaticamente.")
+        status_lista = esperar_lista_ou_sem_checkbox(timeout=WAIT_LISTA_TIMEOUT)
+        if status_lista.startswith("sem_checkbox"):
+            print("Tela de lista carregada sem checkbox; empresa será concluída sem competência.")
+        else:
+            print("Tela de lista de notas carregada automaticamente.")
         return
     except Exception as e:
         ultimo_erro = e
@@ -165,8 +168,11 @@ def navegar_para_lista_nota_fiscal():
         try:
             el = WebDriverWait(driver, 8).until(EC.element_to_be_clickable((by, sel)))
             click_robusto(el)
-            esperar_lista(timeout=WAIT_LISTA_TIMEOUT)
-            print("Tela de lista de notas carregada automaticamente (fallback por texto).")
+            status_lista = esperar_lista_ou_sem_checkbox(timeout=WAIT_LISTA_TIMEOUT)
+            if status_lista.startswith("sem_checkbox"):
+                print("Tela de lista carregada sem checkbox (fallback); empresa será concluída sem competência.")
+            else:
+                print("Tela de lista de notas carregada automaticamente (fallback por texto).")
             return
         except Exception as e:
             ultimo_erro = e
@@ -190,14 +196,21 @@ def esperar_lista_ou_sem_checkbox(timeout=WAIT_LISTA_TIMEOUT):
         if len(checks) > 0:
             return "checkboxes"
 
+        # Caso real observado: há linha e radio selecionado, mas sem checkbox de marcação.
+        radios_linha = driver.find_elements(By.NAME, "gridListaSelected")
+        celulas_linha = driver.find_elements(By.CSS_SELECTOR, "td[id*=',-1_gridLista']")
+
         # Se já existe coluna de data da grid, a lista carregou mesmo sem checkboxes.
         datas = driver.find_elements(By.CSS_SELECTOR, "td[id*=',10_gridLista']")
-        if len(datas) > 0:
+        if len(datas) > 0 and len(checks) == 0:
             return "sem_checkbox_com_data"
+
+        if (len(radios_linha) > 0 or len(celulas_linha) > 0) and len(checks) == 0:
+            return "sem_checkbox"
 
         # Fallback: page size presente também indica lista carregada.
         has_pagesize = len(driver.find_elements(By.ID, "gridListaPageSize")) > 0
-        if has_pagesize:
+        if has_pagesize and len(checks) == 0:
             return "sem_checkbox"
 
         return False
