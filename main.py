@@ -48,8 +48,10 @@ LIMITE_HEURISTICA_FORA_ALVO = int(os.environ.get("LIMITE_HEURISTICA_FORA_ALVO", 
 STRICT_LISTA_INICIAL = os.environ.get("STRICT_LISTA_INICIAL", "0").strip() == "1"
 MSG_CAPTCHA_TIMEOUT = "CAPTCHA_NAO_RESOLVIDO_NO_TEMPO"
 MSG_SEM_COMPETENCIA = "SUCESSO_SEM_COMPETENCIA"
+MSG_CREDENCIAL_INVALIDA = "CREDENCIAL_INVALIDA"
 EXIT_CODE_CAPTCHA_TIMEOUT = 30
 EXIT_CODE_SEM_COMPETENCIA = 40
+EXIT_CODE_CREDENCIAL_INVALIDA = 50
 
 AUTO_LOGIN_PREFEITURA = os.environ.get("AUTO_LOGIN_PREFEITURA", "0").strip() == "1"
 LOGIN_URL_PREFEITURA = os.environ.get(
@@ -91,6 +93,40 @@ print("Chrome iniciado.")
 login_wait_seconds = int(os.environ.get("LOGIN_WAIT_SECONDS", "120"))
 
 
+def limpar_input(el):
+    try:
+        el.clear()
+    except Exception:
+        pass
+    try:
+        el.send_keys(Keys.CONTROL, "a")
+        el.send_keys(Keys.DELETE)
+    except Exception:
+        try:
+            el.send_keys(Keys.COMMAND, "a")
+            el.send_keys(Keys.DELETE)
+        except Exception:
+            pass
+    try:
+        driver.execute_script("arguments[0].value='';", el)
+    except Exception:
+        pass
+
+
+def credencial_invalida_na_tela() -> bool:
+    try:
+        src = (driver.page_source or "").lower()
+        sinais = [
+            "usuario invalido",
+            "usuário inválido",
+            "senha invalida",
+            "senha inválida",
+        ]
+        return any(t in src for t in sinais)
+    except Exception:
+        return False
+
+
 def preencher_login_prefeitura_se_habilitado():
     if not AUTO_LOGIN_PREFEITURA:
         return
@@ -104,9 +140,9 @@ def preencher_login_prefeitura_se_habilitado():
     campo_usuario = wait.until(EC.presence_of_element_located((By.ID, LOGIN_CAMPO_USUARIO)))
     campo_senha = wait.until(EC.presence_of_element_located((By.ID, LOGIN_CAMPO_SENHA)))
 
-    campo_usuario.clear()
+    limpar_input(campo_usuario)
     campo_usuario.send_keys(cnpj)
-    campo_senha.clear()
+    limpar_input(campo_senha)
     campo_senha.send_keys(senha)
 
     wait.until(EC.element_to_be_clickable((By.ID, LOGIN_BOTAO_ENTRAR)))
@@ -114,9 +150,14 @@ def preencher_login_prefeitura_se_habilitado():
     print("CNPJ e senha preenchidos. Resolva o captcha e clique em 'Entrar' manualmente.")
     print(f"Aguardando dashboard por até {login_wait_seconds}s...")
 
-    try:
-        WebDriverWait(driver, login_wait_seconds).until(EC.presence_of_element_located((By.ID, LOGIN_CARD_DASHBOARD)))
-    except TimeoutException:
+    fim = time.time() + login_wait_seconds
+    while time.time() < fim:
+        if credencial_invalida_na_tela():
+            raise RuntimeError(MSG_CREDENCIAL_INVALIDA)
+        if driver.find_elements(By.ID, LOGIN_CARD_DASHBOARD):
+            break
+        sleep(0.4)
+    else:
         raise RuntimeError(MSG_CAPTCHA_TIMEOUT)
 
     navegar_para_lista_nota_fiscal()
@@ -792,23 +833,9 @@ def processar_nota_por_indice(i, ano_alvo, mes_alvo):
                 except Exception:
                     pass
 
-                if ENCONTROU_MES_ALVO:
-                    CONT_FORA_APOS_ALVO += 1
-                    if CONT_FORA_APOS_ALVO >= LIMITE_HEURISTICA_FORA_ALVO:
-                        print(
-                            f"Heuristica acionada: {CONT_FORA_APOS_ALVO} notas consecutivas fora do alvo "
-                            f"apos encontrar o mês alvo. Encerrando processo."
-                        )
-                        PARAR_PROCESSAMENTO = True
-                else:
-                    CONT_FORA_ANTES_ALVO += 1
-                    if CONT_FORA_ANTES_ALVO >= LIMITE_HEURISTICA_FORA_ALVO:
-                        print(
-                            f"Heuristica acionada: {CONT_FORA_ANTES_ALVO} notas antigas consecutivas "
-                            f"antes de encontrar o mês alvo. Encerrando empresa como sem competência."
-                        )
-                        SEM_COMPETENCIA_NA_EMPRESA = True
-                        PARAR_PROCESSAMENTO = True
+                print("Primeira nota mais antiga que a competência alvo encontrada. Encerrando empresa como sem competência.")
+                SEM_COMPETENCIA_NA_EMPRESA = True
+                PARAR_PROCESSAMENTO = True
                 return True
 
             # comp == 0 (mês alvo)
@@ -998,6 +1025,8 @@ except RuntimeError as e:
         sys.exit(EXIT_CODE_CAPTCHA_TIMEOUT)
     if MSG_SEM_COMPETENCIA in msg:
         sys.exit(EXIT_CODE_SEM_COMPETENCIA)
+    if MSG_CREDENCIAL_INVALIDA in msg:
+        sys.exit(EXIT_CODE_CREDENCIAL_INVALIDA)
     raise
 finally:
     driver.quit()

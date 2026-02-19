@@ -206,7 +206,7 @@ Opcional: para usar outro arquivo, defina `EMPRESAS_ARQUIVO` (ex.: `empresas.csv
 
 Opcional: para retomar de onde parou e pular empresas já concluídas no report anterior, use `CONTINUAR_DE_ONDE_PAROU=1` (padrão).
 
-Opcional: para reduzir/aumentar parada por notas antigas fora da competência, use `LIMITE_HEURISTICA_FORA_ALVO` (padrão atual: `2`).
+Observação: ao encontrar a primeira nota mais antiga que a competência alvo, a empresa é encerrada como sem competência (ordem decrescente).
 
 3. Para cada empresa (etapa atual):
    - o robô abre a URL de login da prefeitura;
@@ -217,4 +217,5 @@ Opcional: para reduzir/aumentar parada por notas antigas fora da competência, u
 4. O relatório consolidado será gerado na raiz:
    - `report_execucao_empresas.csv`
    - quando não houver notas da competência alvo, o status registrado será `SUCESSO_SEM_COMPETENCIA` (sem retries desnecessários).
+   - quando houver usuário/senha inválidos na prefeitura, a empresa é marcada como `SUCESSO` com motivo no report para revisão da planilha.
    - quando a lista carregar sem checkboxes (empresa sem notas selecionáveis), também finaliza como `SUCESSO_SEM_COMPETENCIA`; se a primeira Data Emissão já vier mais antiga que a competência alvo, encerra imediatamente.

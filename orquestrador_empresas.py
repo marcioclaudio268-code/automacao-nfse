@@ -14,6 +14,7 @@ CONTINUAR_DE_ONDE_PAROU = os.environ.get("CONTINUAR_DE_ONDE_PAROU", "1").strip()
 MSG_CAPTCHA_TIMEOUT = "CAPTCHA_NAO_RESOLVIDO_NO_TEMPO"
 EXIT_CODE_CAPTCHA_TIMEOUT = 30
 EXIT_CODE_SEM_COMPETENCIA = 40
+EXIT_CODE_CREDENCIAL_INVALIDA = 50
 
 
 def normalizar_header(h: str) -> str:
@@ -192,6 +193,15 @@ def executar_empresa(empresa: dict):
             return {
                 "status": "SUCESSO_SEM_COMPETENCIA",
                 "motivo": "Sem notas na competência alvo",
+                "tentativas": tentativa,
+                "inicio": inicio,
+                "fim": datetime.now(),
+            }
+
+        if proc.returncode == EXIT_CODE_CREDENCIAL_INVALIDA:
+            return {
+                "status": "SUCESSO",
+                "motivo": "Credencial inválida na prefeitura (revisar planilha)",
                 "tentativas": tentativa,
                 "inicio": inicio,
                 "fim": datetime.now(),
