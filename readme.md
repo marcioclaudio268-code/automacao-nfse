@@ -182,3 +182,39 @@ O robô possui tratamento de falha e tenta novamente automaticamente.
 
 
 
+
+
+
+## Execução em lote (semi-automático)
+
+Para processar várias empresas com captcha manual e relatório final CSV:
+
+1. Prepare `empresas.xlsx` (recomendado) **ou** `empresas.csv` (separador `;`) com colunas:
+   - Código
+   - Razão Social
+   - CNPJ
+   - Segmento
+   - Senha Prefeitura
+
+2. Execute:
+
+```bash
+python orquestrador_empresas.py
+```
+
+Opcional: para usar outro arquivo, defina `EMPRESAS_ARQUIVO` (ex.: `empresas.csv`).
+
+Opcional: para retomar de onde parou e pular empresas já concluídas no report anterior, use `CONTINUAR_DE_ONDE_PAROU=1` (padrão).
+
+Opcional: para reduzir/aumentar parada por notas antigas fora da competência, use `LIMITE_HEURISTICA_FORA_ALVO` (padrão atual: `2`).
+
+3. Para cada empresa (etapa atual):
+   - o robô abre a URL de login da prefeitura;
+   - preenche CNPJ/senha automaticamente;
+   - você resolve o captcha e clica em `Entrar` manualmente;
+   - após o login, o robô clica em `Nota Fiscal` e no segundo dashboard clica em `Lista Nota Fiscais` automaticamente.
+
+4. O relatório consolidado será gerado na raiz:
+   - `report_execucao_empresas.csv`
+   - quando não houver notas da competência alvo, o status registrado será `SUCESSO_SEM_COMPETENCIA` (sem retries desnecessários).
+   - quando a lista carregar sem checkboxes (empresa sem notas selecionáveis), também finaliza como `SUCESSO_SEM_COMPETENCIA`; se a primeira Data Emissão já vier mais antiga que a competência alvo, encerra imediatamente.
