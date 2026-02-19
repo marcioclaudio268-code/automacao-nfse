@@ -218,4 +218,5 @@ Observação: ao encontrar a primeira nota mais antiga que a competência alvo, 
    - `report_execucao_empresas.csv`
    - quando não houver notas da competência alvo, o status registrado será `SUCESSO_SEM_COMPETENCIA` (sem retries desnecessários).
    - quando houver usuário/senha inválidos na prefeitura, a empresa é marcada como `SUCESSO` com motivo no report para revisão da planilha.
+   - quando o contribuinte não possui módulo `Nota Fiscal`, a empresa é marcada como `SUCESSO_SEM_SERVICOS`.
    - quando a lista carregar sem checkboxes (empresa sem notas selecionáveis), também finaliza como `SUCESSO_SEM_COMPETENCIA`; se a primeira Data Emissão já vier mais antiga que a competência alvo, encerra imediatamente.

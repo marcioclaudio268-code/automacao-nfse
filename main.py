@@ -48,9 +48,11 @@ LIMITE_HEURISTICA_FORA_ALVO = int(os.environ.get("LIMITE_HEURISTICA_FORA_ALVO", 
 STRICT_LISTA_INICIAL = os.environ.get("STRICT_LISTA_INICIAL", "0").strip() == "1"
 MSG_CAPTCHA_TIMEOUT = "CAPTCHA_NAO_RESOLVIDO_NO_TEMPO"
 MSG_SEM_COMPETENCIA = "SUCESSO_SEM_COMPETENCIA"
+MSG_SEM_SERVICOS = "SUCESSO_SEM_SERVICOS"
 MSG_CREDENCIAL_INVALIDA = "CREDENCIAL_INVALIDA"
 EXIT_CODE_CAPTCHA_TIMEOUT = 30
 EXIT_CODE_SEM_COMPETENCIA = 40
+EXIT_CODE_SEM_SERVICOS = 41
 EXIT_CODE_CREDENCIAL_INVALIDA = 50
 
 AUTO_LOGIN_PREFEITURA = os.environ.get("AUTO_LOGIN_PREFEITURA", "0").strip() == "1"
@@ -127,6 +129,19 @@ def credencial_invalida_na_tela() -> bool:
         return False
 
 
+def sem_modulo_nota_fiscal_no_dashboard() -> bool:
+    """Detecta contribuinte sem módulo de Nota Fiscal no dashboard inicial."""
+    try:
+        # Espera estrutura de botões aparecer antes de concluir ausência.
+        if not driver.find_elements(By.ID, "divbotoes"):
+            return False
+        tem_img = len(driver.find_elements(By.ID, "imgnotafiscal")) > 0
+        tem_txt = len(driver.find_elements(By.ID, LOGIN_CARD_DASHBOARD)) > 0
+        return not (tem_img or tem_txt)
+    except Exception:
+        return False
+
+
 def preencher_login_prefeitura_se_habilitado():
     if not AUTO_LOGIN_PREFEITURA:
         return
@@ -154,6 +169,8 @@ def preencher_login_prefeitura_se_habilitado():
     while time.time() < fim:
         if credencial_invalida_na_tela():
             raise RuntimeError(MSG_CREDENCIAL_INVALIDA)
+        if sem_modulo_nota_fiscal_no_dashboard():
+            raise RuntimeError(MSG_SEM_SERVICOS)
         if driver.find_elements(By.ID, LOGIN_CARD_DASHBOARD):
             break
         sleep(0.4)
@@ -366,7 +383,8 @@ def primeira_data_emissao_visivel_sem_checkbox():
 
 def extrair_info_linha(checkbox):
     tr = checkbox.find_element(By.XPATH, "./ancestor::tr[1]")
-    return {
+
+    info = {
         "id_interno": checkbox.get_attribute("value") or "",
         "nf": td_text(tr, 6),
         "situacao": td_text(tr, 9),
@@ -374,6 +392,20 @@ def extrair_info_linha(checkbox):
         "rps": td_text(tr, 11),
         "chave": td_text(tr, 14),
     }
+
+    # Alguns contribuintes chegam com deslocamento de +1 coluna na grid.
+    if not parse_data_emissao_site(info.get("data_emissao", "")):
+        alt = {
+            "nf": td_text(tr, 7),
+            "situacao": td_text(tr, 10),
+            "data_emissao": td_text(tr, 11),
+            "rps": td_text(tr, 12),
+            "chave": td_text(tr, 15),
+        }
+        if parse_data_emissao_site(alt.get("data_emissao", "")):
+            info.update(alt)
+
+    return info
 
 def nota_cancelada(info: dict) -> bool:
     situacao = (info.get("situacao") or "").strip().lower()
@@ -1025,6 +1057,8 @@ except RuntimeError as e:
         sys.exit(EXIT_CODE_CAPTCHA_TIMEOUT)
     if MSG_SEM_COMPETENCIA in msg:
         sys.exit(EXIT_CODE_SEM_COMPETENCIA)
+    if MSG_SEM_SERVICOS in msg:
+        sys.exit(EXIT_CODE_SEM_SERVICOS)
     if MSG_CREDENCIAL_INVALIDA in msg:
         sys.exit(EXIT_CODE_CREDENCIAL_INVALIDA)
     raise

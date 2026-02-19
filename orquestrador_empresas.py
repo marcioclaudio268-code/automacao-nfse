@@ -14,6 +14,7 @@ CONTINUAR_DE_ONDE_PAROU = os.environ.get("CONTINUAR_DE_ONDE_PAROU", "1").strip()
 MSG_CAPTCHA_TIMEOUT = "CAPTCHA_NAO_RESOLVIDO_NO_TEMPO"
 EXIT_CODE_CAPTCHA_TIMEOUT = 30
 EXIT_CODE_SEM_COMPETENCIA = 40
+EXIT_CODE_SEM_SERVICOS = 41
 EXIT_CODE_CREDENCIAL_INVALIDA = 50
 
 
@@ -198,6 +199,15 @@ def executar_empresa(empresa: dict):
                 "fim": datetime.now(),
             }
 
+        if proc.returncode == EXIT_CODE_SEM_SERVICOS:
+            return {
+                "status": "SUCESSO_SEM_SERVICOS",
+                "motivo": "Contribuinte sem módulo de Nota Fiscal",
+                "tentativas": tentativa,
+                "inicio": inicio,
+                "fim": datetime.now(),
+            }
+
         if proc.returncode == EXIT_CODE_CREDENCIAL_INVALIDA:
             return {
                 "status": "SUCESSO",
@@ -291,7 +301,7 @@ def main():
 
     salvar_report(resultados)
     total = len(resultados)
-    ok = sum(1 for r in resultados if r["resultado"]["status"] in {"SUCESSO", "SUCESSO_SEM_COMPETENCIA"})
+    ok = sum(1 for r in resultados if r["resultado"]["status"] in {"SUCESSO", "SUCESSO_SEM_COMPETENCIA", "SUCESSO_SEM_SERVICOS"})
     falha = total - ok
     print("\n" + "=" * 80)
     print(f"Processamento finalizado. Total={total} | Sucesso={ok} | Falha={falha}")
