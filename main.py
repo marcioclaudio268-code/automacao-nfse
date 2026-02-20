@@ -1,6 +1,7 @@
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import WebDriverWait, Select
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import (
@@ -10,7 +11,8 @@ from selenium.common.exceptions import (
     WebDriverException,
 )
 from time import sleep
-import os, time, re, csv
+import os, time, re, csv, tempfile
+import sys
 from datetime import datetime
 import xml.etree.ElementTree as ET
 import shutil
@@ -31,14 +33,53 @@ LOG_FILENAME = "log_downloads_nfse.csv"
 
 # Se quiser travar a empresa SEM depender do texto do site, descomente:
 # EMPRESA_PASTA_FORCADA = "H2_IMOBILIARIA"
-EMPRESA_PASTA_FORCADA = ""
+EMPRESA_PASTA_FORCADA = os.environ.get("EMPRESA_PASTA_FORCADA", "")
+
+# Competência alvo: por padrão, mês anterior ao mês atual (apuração).
+# Pode sobrescrever com APURACAO_REFERENCIA=MM/AAAA (ex.: 03/2026 -> alvo 02/2026).
+APURACAO_REFERENCIA = os.environ.get("APURACAO_REFERENCIA", "").strip()
+
+PARAR_PROCESSAMENTO = False
+ENCONTROU_MES_ALVO = False
+CONT_FORA_APOS_ALVO = 0
+CONT_FORA_ANTES_ALVO = 0
+SEM_COMPETENCIA_NA_EMPRESA = False
+LIMITE_HEURISTICA_FORA_ALVO = int(os.environ.get("LIMITE_HEURISTICA_FORA_ALVO", "2"))
+STRICT_LISTA_INICIAL = os.environ.get("STRICT_LISTA_INICIAL", "0").strip() == "1"
+MSG_CAPTCHA_TIMEOUT = "CAPTCHA_NAO_RESOLVIDO_NO_TEMPO"
+MSG_SEM_COMPETENCIA = "SUCESSO_SEM_COMPETENCIA"
+MSG_SEM_SERVICOS = "SUCESSO_SEM_SERVICOS"
+MSG_CREDENCIAL_INVALIDA = "CREDENCIAL_INVALIDA"
+EXIT_CODE_CAPTCHA_TIMEOUT = 30
+EXIT_CODE_SEM_COMPETENCIA = 40
+EXIT_CODE_SEM_SERVICOS = 41
+EXIT_CODE_CREDENCIAL_INVALIDA = 50
+
+AUTO_LOGIN_PREFEITURA = os.environ.get("AUTO_LOGIN_PREFEITURA", "0").strip() == "1"
+LOGIN_URL_PREFEITURA = os.environ.get(
+    "LOGIN_URL_PREFEITURA",
+    "https://tributario.bauru.sp.gov.br/loginCNPJContribuinte.jsp?execobj=ContribuintesWebRelacionados",
+).strip()
+LOGIN_CAMPO_USUARIO = os.environ.get("LOGIN_CAMPO_USUARIO", "usuario").strip()
+LOGIN_CAMPO_SENHA = os.environ.get("LOGIN_CAMPO_SENHA", "senha").strip()
+LOGIN_BOTAO_ENTRAR = os.environ.get("LOGIN_BOTAO_ENTRAR", "btnEntrar").strip()
+LOGIN_CARD_DASHBOARD = os.environ.get("LOGIN_CARD_DASHBOARD", "divtxtnotafiscal").strip()
+LOGIN_CARD_LISTA_NOTAS = os.environ.get("LOGIN_CARD_LISTA_NOTAS", "divtxtlistanf").strip()
+GRID_HEADER_CACHE = {"ts": 0.0, "map": {}}
 
 # =====================
 # CHROME – PERFIL EXCLUSIVO
 # =====================
 options = Options()
 options.add_argument("--start-maximized")
-options.add_argument(r"--user-data-dir=C:\ChromeRobotProfile")
+
+# Perfil exclusivo com fallback cross-platform.
+DEFAULT_PROFILE_DIR = (
+    r"C:\ChromeRobotProfile" if os.name == "nt"
+    else os.path.join(tempfile.gettempdir(), "ChromeRobotProfile")
+)
+CHROME_PROFILE_DIR = os.environ.get("CHROME_PROFILE_DIR", DEFAULT_PROFILE_DIR)
+options.add_argument(f"--user-data-dir={CHROME_PROFILE_DIR}")
 
 prefs = {
     "download.default_directory": TEMP_DOWNLOAD_DIR,  # <<< importante
@@ -52,9 +93,98 @@ driver = webdriver.Chrome(options=options)
 wait = WebDriverWait(driver, 30)
 
 print("Chrome iniciado.")
-print("Entre manualmente em: Nota Fiscal - Lista Nota Fiscais")
-print("Voce tem 40 segundos.")
-sleep(40)
+login_wait_seconds = int(os.environ.get("LOGIN_WAIT_SECONDS", "120"))
+
+
+def limpar_input(el):
+    try:
+        el.clear()
+    except Exception:
+        pass
+    try:
+        el.send_keys(Keys.CONTROL, "a")
+        el.send_keys(Keys.DELETE)
+    except Exception:
+        try:
+            el.send_keys(Keys.COMMAND, "a")
+            el.send_keys(Keys.DELETE)
+        except Exception:
+            pass
+    try:
+        driver.execute_script("arguments[0].value='';", el)
+    except Exception:
+        pass
+
+
+def credencial_invalida_na_tela() -> bool:
+    try:
+        src = (driver.page_source or "").lower()
+        sinais = [
+            "usuario invalido",
+            "usuário inválido",
+            "senha invalida",
+            "senha inválida",
+        ]
+        return any(t in src for t in sinais)
+    except Exception:
+        return False
+
+
+def sem_modulo_nota_fiscal_no_dashboard() -> bool:
+    """Detecta contribuinte sem módulo de Nota Fiscal no dashboard inicial."""
+    try:
+        # Espera estrutura de botões aparecer antes de concluir ausência.
+        if not driver.find_elements(By.ID, "divbotoes"):
+            return False
+        tem_img = len(driver.find_elements(By.ID, "imgnotafiscal")) > 0
+        tem_txt = len(driver.find_elements(By.ID, LOGIN_CARD_DASHBOARD)) > 0
+        return not (tem_img or tem_txt)
+    except Exception:
+        return False
+
+
+def preencher_login_prefeitura_se_habilitado():
+    if not AUTO_LOGIN_PREFEITURA:
+        return
+
+    cnpj = re.sub(r"\D", "", os.environ.get("EMPRESA_CNPJ", ""))
+    senha = os.environ.get("EMPRESA_SENHA", "")
+    if not cnpj or not senha:
+        raise RuntimeError("AUTO_LOGIN_PREFEITURA ativo, mas EMPRESA_CNPJ/EMPRESA_SENHA não informados")
+
+    driver.get(LOGIN_URL_PREFEITURA)
+    campo_usuario = wait.until(EC.presence_of_element_located((By.ID, LOGIN_CAMPO_USUARIO)))
+    campo_senha = wait.until(EC.presence_of_element_located((By.ID, LOGIN_CAMPO_SENHA)))
+
+    limpar_input(campo_usuario)
+    campo_usuario.send_keys(cnpj)
+    limpar_input(campo_senha)
+    campo_senha.send_keys(senha)
+
+    wait.until(EC.element_to_be_clickable((By.ID, LOGIN_BOTAO_ENTRAR)))
+
+    print("CNPJ e senha preenchidos. Resolva o captcha e clique em 'Entrar' manualmente.")
+    print(f"Aguardando dashboard por até {login_wait_seconds}s...")
+
+    fim = time.time() + login_wait_seconds
+    while time.time() < fim:
+        if credencial_invalida_na_tela():
+            raise RuntimeError(MSG_CREDENCIAL_INVALIDA)
+        if sem_modulo_nota_fiscal_no_dashboard():
+            raise RuntimeError(MSG_SEM_SERVICOS)
+        if driver.find_elements(By.ID, LOGIN_CARD_DASHBOARD):
+            break
+        sleep(0.4)
+    else:
+        raise RuntimeError(MSG_CAPTCHA_TIMEOUT)
+
+    navegar_para_lista_nota_fiscal()
+
+
+if not AUTO_LOGIN_PREFEITURA:
+    print("Entre manualmente em: Nota Fiscal - Lista Nota Fiscais")
+    print(f"Você tem {login_wait_seconds} segundos para iniciar manualmente.")
+    sleep(login_wait_seconds)
 
 # =====================
 # HELPERS – CLIQUE / LISTA / 502
@@ -65,16 +195,106 @@ def click_robusto(el):
     except ElementClickInterceptedException:
         driver.execute_script("arguments[0].click();", el)
 
+
+def navegar_para_lista_nota_fiscal():
+    print("Login confirmado. Navegando automaticamente: Nota Fiscal -> Lista Nota Fiscais...")
+
+    # 1) Dashboard inicial: clicar em Nota Fiscal.
+    card_nf = wait.until(EC.element_to_be_clickable((By.ID, LOGIN_CARD_DASHBOARD)))
+    click_robusto(card_nf)
+
+    # 2) Segundo dashboard: clicar no card Lista Nota Fiscais (id confirmado pelo escritório).
+    try:
+        card_lista = WebDriverWait(driver, 12).until(EC.element_to_be_clickable((By.ID, LOGIN_CARD_LISTA_NOTAS)))
+        click_robusto(card_lista)
+        status_lista = esperar_lista_ou_sem_checkbox(timeout=WAIT_LISTA_TIMEOUT)
+        if status_lista.startswith("sem_checkbox"):
+            print("Tela de lista carregada sem checkbox; empresa será concluída sem competência.")
+        else:
+            print("Tela de lista de notas carregada automaticamente.")
+        return
+    except Exception as e:
+        ultimo_erro = e
+
+    # Fallback por texto para maior resiliência se o id variar.
+    seletores_lista = [
+        (By.XPATH, "//a[contains(normalize-space(.), 'Lista Nota Fiscais')]"),
+        (By.XPATH, "//span[contains(normalize-space(.), 'Lista Nota Fiscais')]"),
+        (By.XPATH, "//*[contains(normalize-space(.), 'Lista Nota Fiscais')]"),
+    ]
+
+    for by, sel in seletores_lista:
+        try:
+            el = WebDriverWait(driver, 8).until(EC.element_to_be_clickable((by, sel)))
+            click_robusto(el)
+            status_lista = esperar_lista_ou_sem_checkbox(timeout=WAIT_LISTA_TIMEOUT)
+            if status_lista.startswith("sem_checkbox"):
+                print("Tela de lista carregada sem checkbox (fallback); empresa será concluída sem competência.")
+            else:
+                print("Tela de lista de notas carregada automaticamente (fallback por texto).")
+            return
+        except Exception as e:
+            ultimo_erro = e
+
+    raise RuntimeError(f"NAO_FOI_POSSIVEL_ABRIR_LISTA_NOTAS: {ultimo_erro}")
+
 def esperar_lista(timeout=WAIT_LISTA_TIMEOUT):
     WebDriverWait(driver, timeout).until(
         EC.presence_of_all_elements_located((By.NAME, "gridListaCheck"))
     )
+
+def esperar_lista_ou_sem_checkbox(timeout=WAIT_LISTA_TIMEOUT):
+    """
+    Aguarda a tela de lista ficar pronta e classifica:
+      - "checkboxes": há notas selecionáveis
+      - "sem_checkbox_com_data": lista sem checkbox, mas com data de emissão visível
+      - "sem_checkbox": lista carregada sem checkbox (fallback por page size)
+    """
+    def cond(_):
+        checks = driver.find_elements(By.NAME, "gridListaCheck")
+        if len(checks) > 0:
+            return "checkboxes"
+
+        # Caso real observado: há linha e radio selecionado, mas sem checkbox de marcação.
+        radios_linha = driver.find_elements(By.NAME, "gridListaSelected")
+        celulas_linha = driver.find_elements(By.CSS_SELECTOR, "td[id*=',-1_gridLista']")
+
+        # Se já existe coluna de data da grid, a lista carregou mesmo sem checkboxes.
+        datas = driver.find_elements(By.CSS_SELECTOR, "td[id*=',10_gridLista']")
+        if len(datas) > 0 and len(checks) == 0:
+            return "sem_checkbox_com_data"
+
+        if (len(radios_linha) > 0 or len(celulas_linha) > 0) and len(checks) == 0:
+            return "sem_checkbox"
+
+        # Fallback: page size presente também indica lista carregada.
+        has_pagesize = len(driver.find_elements(By.ID, "gridListaPageSize")) > 0
+        if has_pagesize and len(checks) == 0:
+            return "sem_checkbox"
+
+        return False
+
+    return WebDriverWait(driver, timeout).until(cond)
 
 def lista_ativa():
     try:
         return len(driver.find_elements(By.NAME, "gridListaCheck")) > 0
     except Exception:
         return False
+
+def assinatura_lista():
+    """Assinatura leve da grid para detectar refresh/paginação."""
+    try:
+        checks = driver.find_elements(By.NAME, "gridListaCheck")
+        values = [c.get_attribute("value") or "" for c in checks[:5]]
+        return f"{len(checks)}|{'|'.join(values)}"
+    except Exception:
+        return ""
+
+def esperar_troca_de_grid(assinatura_anterior, timeout=WAIT_LISTA_TIMEOUT):
+    def mudou(_):
+        return assinatura_lista() != assinatura_anterior
+    WebDriverWait(driver, timeout).until(mudou)
 
 def is_502_page():
     """
@@ -153,15 +373,104 @@ def td_text(tr, col):
     el = tr.find_element(By.CSS_SELECTOR, f"td[id*=',{col}_gridLista']")
     return (el.text or "").strip()
 
+
+def _normalizar_titulo_coluna(txt: str) -> str:
+    txt = (txt or "").replace("\xa0", " ").strip().lower()
+    txt = txt.replace("º", "o")
+    txt = re.sub(r"\s+", " ", txt)
+    return txt
+
+
+def mapa_colunas_grid_lista(force=False):
+    """
+    Mapeia colunas pelo THEAD para evitar leitura deslocada (empresa/tema diferente).
+    O `columnorder` do TH começa em 0 após a coluna de checkbox,
+    então no TD o índice final é `columnorder - 1`.
+    """
+    global GRID_HEADER_CACHE
+
+    now = time.time()
+    if not force and GRID_HEADER_CACHE["map"] and (now - GRID_HEADER_CACHE["ts"]) < 10:
+        return GRID_HEADER_CACHE["map"]
+
+    col_map = {}
+    headers = driver.find_elements(By.CSS_SELECTOR, "#_gridListaTHeadLinhas th[columnorder]")
+    for th in headers:
+        try:
+            order_raw = th.get_attribute("columnorder")
+            if order_raw is None:
+                continue
+            order = int(order_raw)
+            idx_td = order - 1
+            if idx_td < 0:
+                continue
+
+            titulo = _normalizar_titulo_coluna(th.text)
+            if not titulo:
+                continue
+
+            if ("data emissao" in titulo) and ("rps" not in titulo):
+                col_map["data_emissao"] = idx_td
+            elif ("situacao" in titulo) or ("situação" in titulo):
+                col_map["situacao"] = idx_td
+            elif " chave de validacao/acesso" in f" {titulo}" or "chave de validacao" in titulo:
+                col_map["chave"] = idx_td
+            elif "rps" in titulo and "data" not in titulo and "serie" not in titulo and "série" not in titulo:
+                col_map["rps"] = idx_td
+            elif titulo == "nf" or titulo.startswith("nf "):
+                col_map["nf"] = idx_td
+        except Exception:
+            continue
+
+    GRID_HEADER_CACHE = {"ts": now, "map": col_map}
+    return col_map
+
+
+def primeira_data_emissao_visivel_sem_checkbox():
+    """Lê a primeira data da coluna Data Emissão quando não há checkbox."""
+    col_data = mapa_colunas_grid_lista().get("data_emissao", 10)
+    try:
+        el = driver.find_element(By.CSS_SELECTOR, f"td[id*=',{col_data}_gridLista']")
+        return (el.text or "").strip()
+    except Exception:
+        return ""
+
 def extrair_info_linha(checkbox):
     tr = checkbox.find_element(By.XPATH, "./ancestor::tr[1]")
-    return {
+
+    mapa = mapa_colunas_grid_lista()
+    col_nf = mapa.get("nf", 6)
+    col_situacao = mapa.get("situacao", 9)
+    col_data = mapa.get("data_emissao", 10)
+    col_rps = mapa.get("rps", 11)
+    col_chave = mapa.get("chave", 14)
+
+    info = {
         "id_interno": checkbox.get_attribute("value") or "",
-        "nf": td_text(tr, 6),
-        "data_emissao": td_text(tr, 10),  # dd/mm/aaaa
-        "rps": td_text(tr, 11),
-        "chave": td_text(tr, 14),
+        "nf": td_text(tr, col_nf),
+        "situacao": td_text(tr, col_situacao),
+        "data_emissao": td_text(tr, col_data),  # dd/mm/aaaa
+        "rps": td_text(tr, col_rps),
+        "chave": td_text(tr, col_chave),
     }
+
+    # Fallback para grids que chegam deslocadas em +1 coluna.
+    if not parse_data_emissao_site(info.get("data_emissao", "")):
+        alt = {
+            "nf": td_text(tr, col_nf + 1),
+            "situacao": td_text(tr, col_situacao + 1),
+            "data_emissao": td_text(tr, col_data + 1),
+            "rps": td_text(tr, col_rps + 1),
+            "chave": td_text(tr, col_chave + 1),
+        }
+        if parse_data_emissao_site(alt.get("data_emissao", "")):
+            info.update(alt)
+
+    return info
+
+def nota_cancelada(info: dict) -> bool:
+    situacao = (info.get("situacao") or "").strip().lower()
+    return "cancelad" in situacao
 
 def chave_unica(info: dict) -> str:
     ch = (info.get("chave") or "").strip()
@@ -186,6 +495,54 @@ def parse_data_emissao_site(data_emissao: str):
     iso = f"{yyyy}-{mm}-{dd}"
     competencia = f"{mm}.{yyyy}"
     return yyyy, mm, dd, iso, competencia
+
+def calcular_mes_alvo(apuracao_ref: str = ""):
+    """
+    Retorna (ano_alvo, mes_alvo) para download.
+    Regra: sempre mês anterior ao mês de apuração.
+    apuracao_ref esperado: MM/AAAA.
+    """
+    if apuracao_ref:
+        m = re.match(r"^(\d{2})/(\d{4})$", apuracao_ref)
+        if not m:
+            raise ValueError(f"APURACAO_REFERENCIA invalida: {apuracao_ref}. Use MM/AAAA")
+        mes_ap, ano_ap = int(m.group(1)), int(m.group(2))
+    else:
+        hoje = datetime.now()
+        mes_ap, ano_ap = hoje.month, hoje.year
+
+    if not (1 <= mes_ap <= 12):
+        raise ValueError(f"Mes de apuracao invalido: {mes_ap}")
+
+    if mes_ap == 1:
+        return ano_ap - 1, 12
+    return ano_ap, mes_ap - 1
+
+def comparar_competencia_nota(info: dict, ano_alvo: int, mes_alvo: int):
+    """
+    Retorna:
+      1  -> nota mais nova que o mês alvo
+      0  -> nota no mês alvo
+     -1  -> nota mais antiga que o mês alvo
+      None -> data inválida/ausente
+    """
+    parsed = parse_data_emissao_site(info.get("data_emissao", ""))
+    if not parsed:
+        return None
+
+    ano = int(parsed[0])
+    mes = int(parsed[1])
+    comp_nota = (ano, mes)
+    comp_alvo = (ano_alvo, mes_alvo)
+
+    if comp_nota == comp_alvo:
+        return 0
+    if comp_nota > comp_alvo:
+        return 1
+    return -1
+
+def nota_no_mes_alvo(info: dict, ano_alvo: int, mes_alvo: int) -> bool:
+    return comparar_competencia_nota(info, ano_alvo, mes_alvo) == 0
 
 def extrair_dhproc_do_xml(caminho_xml):
     try:
@@ -422,9 +779,79 @@ def organizar_xml_por_pasta(caminho_xml, info):
     return destino_final
 
 # =====================
+# PAGINACAO
+# =====================
+def page_size_atual():
+    try:
+        el = driver.find_element(By.ID, "gridListaPageSize")
+        return int((el.get_attribute("value") or "0").strip() or "0")
+    except Exception:
+        return 0
+
+def definir_page_size(max_por_pagina=100):
+    alvo = min(max_por_pagina, 100)
+    atual = page_size_atual()
+    if atual == alvo:
+        print(f"Page size ja esta em {alvo}.")
+        return
+
+    assinatura_anterior = assinatura_lista()
+    inp = wait.until(EC.element_to_be_clickable((By.ID, "gridListaPageSize")))
+    inp.click()
+    try:
+        inp.send_keys(Keys.CONTROL, "a")
+    except Exception:
+        inp.send_keys(Keys.COMMAND, "a")
+    inp.send_keys(str(alvo))
+    inp.send_keys(Keys.ENTER)
+
+    try:
+        esperar_troca_de_grid(assinatura_anterior, timeout=WAIT_LISTA_TIMEOUT)
+    except TimeoutException:
+        # fallback: ao menos garantir que a lista segue ativa
+        esperar_lista(timeout=WAIT_LISTA_TIMEOUT)
+
+    atual = page_size_atual()
+    print(f"Page size configurado: {atual}")
+
+def pagina_atual():
+    try:
+        val = driver.execute_script("return (document.getElementById('gridListaPage')||{}).value || '';")
+        if str(val).strip().isdigit():
+            return int(str(val).strip())
+    except Exception:
+        pass
+    return None
+
+def ir_para_proxima_pagina():
+    assinatura_anterior = assinatura_lista()
+    pag_antes = pagina_atual()
+
+    botoes = driver.find_elements(
+        By.XPATH,
+        "//span[contains(@onclick,'mudarPagina,gridLista') and normalize-space(.)='»']"
+    )
+    if not botoes:
+        return False
+
+    botao_next = botoes[0]
+    click_robusto(botao_next)
+
+    try:
+        esperar_troca_de_grid(assinatura_anterior, timeout=WAIT_LISTA_TIMEOUT)
+        return True
+    except TimeoutException:
+        pag_depois = pagina_atual()
+        if pag_antes is not None and pag_depois is not None and pag_depois > pag_antes:
+            return True
+        return False
+
+# =====================
 # PROCESSAR UMA NOTA (sem falso 502)
 # =====================
-def processar_nota_por_indice(i):
+def processar_nota_por_indice(i, ano_alvo, mes_alvo):
+    global PARAR_PROCESSAMENTO, ENCONTROU_MES_ALVO, CONT_FORA_APOS_ALVO, CONT_FORA_ANTES_ALVO, SEM_COMPETENCIA_NA_EMPRESA
+
     tentativa = 0
     while tentativa < MAX_RETRIES_POR_NOTA:
         tentativa += 1
@@ -453,9 +880,58 @@ def processar_nota_por_indice(i):
             info = extrair_info_linha(checkbox)
             key = chave_unica(info)
 
+            # Avalia competência primeiro para encerrar cedo em ordem decrescente.
+            comp = comparar_competencia_nota(info, ano_alvo, mes_alvo)
+            if comp is None:
+                msg = f"Data de emissao invalida/ausente: {info.get('data_emissao', '')}"
+                print(f"[{i+1}] SKIP DATA INVALIDA -> NF={info.get('nf')} DATA={info.get('data_emissao')}")
+                try:
+                    salvar_log("", info, status="SKIP_DATA_INVALIDA", mensagem=msg[:180])
+                except Exception:
+                    pass
+                return True
+
+            if comp == 1:
+                CONT_FORA_ANTES_ALVO = 0
+                msg = f"Nota mais nova que mês alvo {mes_alvo:02d}/{ano_alvo}"
+                print(f"[{i+1}] SKIP COMPETENCIA (MAIS NOVA) -> NF={info.get('nf')} DATA={info.get('data_emissao')}")
+                try:
+                    salvar_log("", info, status="SKIP_FORA_COMPETENCIA", mensagem=msg[:180])
+                except Exception:
+                    pass
+                return True
+
+            if comp == -1:
+                msg = f"Nota mais antiga que mês alvo {mes_alvo:02d}/{ano_alvo}"
+                print(f"[{i+1}] SKIP COMPETENCIA (MAIS ANTIGA) -> NF={info.get('nf')} DATA={info.get('data_emissao')}")
+                try:
+                    salvar_log("", info, status="SKIP_FORA_COMPETENCIA", mensagem=msg[:180])
+                except Exception:
+                    pass
+
+                print("Primeira nota mais antiga que a competência alvo encontrada. Encerrando empresa como sem competência.")
+                SEM_COMPETENCIA_NA_EMPRESA = True
+                PARAR_PROCESSAMENTO = True
+                return True
+
+            # comp == 0 (mês alvo)
+            ENCONTROU_MES_ALVO = True
+            CONT_FORA_APOS_ALVO = 0
+            CONT_FORA_ANTES_ALVO = 0
+
             # PREMIUM: SKIP por log
             if key in chaves_ok:
                 print(f"[{i+1}] SKIP -> NF={info.get('nf')} DATA={info.get('data_emissao')}")
+                return True
+
+            # Regra de negocio: não baixar notas canceladas.
+            if nota_cancelada(info):
+                msg = f"Nota cancelada (situacao: {info.get('situacao', '')})"
+                print(f"[{i+1}] SKIP CANCELADA -> NF={info.get('nf')} DATA={info.get('data_emissao')}")
+                try:
+                    salvar_log("", info, status="SKIP_CANCELADA", mensagem=msg[:180])
+                except Exception:
+                    pass
                 return True
 
             print(f"[{i+1}] Tentativa {tentativa}/{MAX_RETRIES_POR_NOTA} -> NF={info.get('nf')} RPS={info.get('rps')} DATA={info.get('data_emissao')}")
@@ -521,12 +997,27 @@ def processar_nota_por_indice(i):
             fechar_modal_exportacao()
             sleep(min(2 * tentativa, 6))
 
-        except (StaleElementReferenceException, WebDriverException, Exception) as e:
+        except (StaleElementReferenceException, WebDriverException) as e:
             msg = str(e)
             print(f"Erro nota [{i+1}] tentativa {tentativa}/{MAX_RETRIES_POR_NOTA}: {msg}")
 
             try:
                 salvar_log("", info, status="ERRO", mensagem=msg[:180])
+            except Exception:
+                pass
+
+            if is_502_page():
+                recover_from_502()
+
+            fechar_modal_exportacao()
+            sleep(min(2 * tentativa, 6))
+
+        except Exception as e:
+            msg = str(e)
+            print(f"Erro inesperado nota [{i+1}] tentativa {tentativa}/{MAX_RETRIES_POR_NOTA}: {msg}")
+
+            try:
+                salvar_log("", info, status="ERRO", mensagem=("Inesperado: " + msg)[:180])
             except Exception:
                 pass
 
@@ -542,24 +1033,93 @@ def processar_nota_por_indice(i):
 # =====================
 # MAIN
 # =====================
+def main():
+    global PARAR_PROCESSAMENTO, ENCONTROU_MES_ALVO, CONT_FORA_APOS_ALVO, CONT_FORA_ANTES_ALVO, SEM_COMPETENCIA_NA_EMPRESA
+
+    preencher_login_prefeitura_se_habilitado()
+
+    ano_alvo, mes_alvo = calcular_mes_alvo(APURACAO_REFERENCIA)
+
+    try:
+        status_lista = esperar_lista_ou_sem_checkbox(timeout=20)
+        if status_lista in {"sem_checkbox", "sem_checkbox_com_data"}:
+            data_ref = primeira_data_emissao_visivel_sem_checkbox()
+            comp = comparar_competencia_nota({"data_emissao": data_ref}, ano_alvo, mes_alvo) if data_ref else None
+
+            if comp == -1:
+                print(
+                    f"Sem checkbox e data inicial antiga ({data_ref}) para alvo {mes_alvo:02d}/{ano_alvo}. "
+                    "Encerrando como sem competência."
+                )
+            else:
+                print("Lista carregada sem checkbox; encerrando como sem competência.")
+
+            raise RuntimeError(MSG_SEM_COMPETENCIA)
+    except TimeoutException:
+        if STRICT_LISTA_INICIAL:
+            raise RuntimeError(MSG_CAPTCHA_TIMEOUT)
+        print("Aviso: lista inicial nao carregou em 20s; seguindo com tentativas por item.")
+
+    ENCONTROU_MES_ALVO = False
+    CONT_FORA_APOS_ALVO = 0
+    CONT_FORA_ANTES_ALVO = 0
+    SEM_COMPETENCIA_NA_EMPRESA = False
+    PARAR_PROCESSAMENTO = False
+    print(f"Mes alvo de download: {mes_alvo:02d}/{ano_alvo}")
+    print(f"Heuristica de parada: {LIMITE_HEURISTICA_FORA_ALVO} notas antigas consecutivas (antes ou apos mês alvo).")
+
+    definir_page_size(100)
+
+    pagina = 1
+    while True:
+        total = len(driver.find_elements(By.NAME, "gridListaCheck"))
+        print(f"Pagina {pagina}: {total} notas encontradas.")
+
+        if total == 0 and not ENCONTROU_MES_ALVO:
+            SEM_COMPETENCIA_NA_EMPRESA = True
+            print("Lista carregada sem checkboxes; encerrando empresa como sem competência.")
+            break
+
+        i = 0
+        while True:
+            checkboxes = driver.find_elements(By.NAME, "gridListaCheck")
+            total = len(checkboxes)
+            if i >= total:
+                break
+
+            processar_nota_por_indice(i, ano_alvo, mes_alvo)
+            if PARAR_PROCESSAMENTO:
+                break
+            i += 1
+
+        if PARAR_PROCESSAMENTO:
+            print("Encerrando varredura por heuristica de competência.")
+            break
+
+        if not ir_para_proxima_pagina():
+            break
+        pagina += 1
+
+    if SEM_COMPETENCIA_NA_EMPRESA:
+        raise RuntimeError(MSG_SEM_COMPETENCIA)
+
+    print("Processo finalizado.")
+    sleep(2)
+
+
 try:
-    esperar_lista(timeout=20)
-except Exception:
-    pass
-
-total = len(driver.find_elements(By.NAME, "gridListaCheck"))
-print(f"Notas encontradas na pagina: {total}")
-
-i = 0
-while True:
-    checkboxes = driver.find_elements(By.NAME, "gridListaCheck")
-    total = len(checkboxes)
-    if i >= total:
-        break
-
-    processar_nota_por_indice(i)
-    i += 1
-
-print("Processo finalizado.")
-sleep(2)
-driver.quit()
+    main()
+except RuntimeError as e:
+    msg = str(e)
+    print(msg)
+    if MSG_CAPTCHA_TIMEOUT in msg:
+        sys.exit(EXIT_CODE_CAPTCHA_TIMEOUT)
+    if MSG_SEM_COMPETENCIA in msg:
+        sys.exit(EXIT_CODE_SEM_COMPETENCIA)
+    if MSG_SEM_SERVICOS in msg:
+        sys.exit(EXIT_CODE_SEM_SERVICOS)
+    if MSG_CREDENCIAL_INVALIDA in msg:
+        sys.exit(EXIT_CODE_CREDENCIAL_INVALIDA)
+    raise
+finally:
+    driver.quit()
