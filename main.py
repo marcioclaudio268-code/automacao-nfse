@@ -912,7 +912,7 @@ def processar_nota_por_indice(i, ano_alvo, mes_alvo):
                 print("Primeira nota mais antiga que a competência alvo encontrada. Encerrando empresa como sem competência.")
                 SEM_COMPETENCIA_NA_EMPRESA = True
                 PARAR_PROCESSAMENTO = True
-                return True
+                raise RuntimeError(MSG_SEM_COMPETENCIA)
 
             # comp == 0 (mês alvo)
             ENCONTROU_MES_ALVO = True
@@ -1011,6 +1011,9 @@ def processar_nota_por_indice(i, ano_alvo, mes_alvo):
 
             fechar_modal_exportacao()
             sleep(min(2 * tentativa, 6))
+
+        except RuntimeError:
+            raise
 
         except Exception as e:
             msg = str(e)
