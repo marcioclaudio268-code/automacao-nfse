@@ -206,6 +206,8 @@ Opcional: para usar outro arquivo, defina `EMPRESAS_ARQUIVO` (ex.: `empresas.csv
 
 Opcional: para retomar de onde parou e pular empresas já concluídas no report anterior, use `CONTINUAR_DE_ONDE_PAROU=1` (padrão).
 
+Opcional: para checkpoint incremental durante a execução, use `USAR_CHECKPOINT=1` (padrão). O orquestrador salva `checkpoint_execucao_empresas.json` e atualiza o report a cada empresa processada.
+
 Observação: ao encontrar a primeira nota mais antiga que a competência alvo, a empresa é encerrada como sem competência (ordem decrescente).
 
 3. Para cada empresa (etapa atual):
