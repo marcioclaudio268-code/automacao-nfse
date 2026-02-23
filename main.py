@@ -383,12 +383,19 @@ def _nf_valido(nf: str) -> bool:
     return len(n) > 0
 
 
-def _inferir_nf_por_proximidade(tr, col_data: int, col_nf: int, col_rps: int, nf_atual: str, rps_atual: str):
+def _inferir_nf_por_proximidade(tr, col_data: int, col_nf: int, col_rps: int, nf_atual: str, rps_atual: str, data_emissao_atual: str):
     """Fallback para recuperar NF quando coluna vem deslocada e NF fica vazia/inválida."""
     if _nf_valido(nf_atual):
         return nf_atual
 
     rps_limpo = _texto_para_numero_limpo(rps_atual)
+    data_limpa = _texto_para_numero_limpo(data_emissao_atual)
+    data_yyyymmdd = ""
+    parsed_data = parse_data_emissao_site(data_emissao_atual or "")
+    if parsed_data:
+        yyyy, mm, dd, _, _ = parsed_data
+        data_yyyymmdd = f"{yyyy}{mm}{dd}"
+
     candidatos = []
 
     # Em layouts conhecidos, NF costuma estar ~4 colunas antes de Data Emissão.
@@ -417,6 +424,10 @@ def _inferir_nf_por_proximidade(tr, col_data: int, col_nf: int, col_rps: int, nf
         if not num:
             continue
         if rps_limpo and num == rps_limpo:
+            continue
+        if data_limpa and num == data_limpa:
+            continue
+        if data_yyyymmdd and num == data_yyyymmdd:
             continue
         if len(num) > 12:
             continue
@@ -524,6 +535,7 @@ def extrair_info_linha(checkbox):
         col_rps=col_rps,
         nf_atual=info.get("nf", ""),
         rps_atual=info.get("rps", ""),
+        data_emissao_atual=info.get("data_emissao", ""),
     )
 
     return info
@@ -798,7 +810,7 @@ def mover_com_retry(src, dst, tentativas=6):
 def organizar_xml_por_pasta(caminho_xml, info):
     """
     Move para:
-      downloads/EMPRESA_PASTA/MM.AAAA/NFS_<NF>_<YYYY-MM-DD>.xml
+      downloads/EMPRESA_PASTA/MM.AAAA/NFS_<NF>_<DD-MM-YYYY>.xml
     Data/competência vem da linha do site (fallback: dhProc).
     """
     parsed = parse_data_emissao_site(info.get("data_emissao", ""))
@@ -818,7 +830,12 @@ def organizar_xml_por_pasta(caminho_xml, info):
     os.makedirs(destino_dir, exist_ok=True)
 
     if data_iso != "SEM_DATA":
-        novo_nome = f"NFS_{nf}_{data_iso}.xml"
+        try:
+            yyyy, mm, dd = data_iso.split("-")
+            data_nome = f"{dd}-{mm}-{yyyy}"
+        except Exception:
+            data_nome = data_iso
+        novo_nome = f"NFS_{nf}_{data_nome}.xml"
     else:
         novo_nome = f"NFS_{nf}.xml"
 
