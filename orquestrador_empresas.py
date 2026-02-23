@@ -19,6 +19,7 @@ EXIT_CODE_CAPTCHA_TIMEOUT = 30
 EXIT_CODE_SEM_COMPETENCIA = 40
 EXIT_CODE_SEM_SERVICOS = 41
 EXIT_CODE_CREDENCIAL_INVALIDA = 50
+STATUS_SUCESSO = {"SUCESSO", "SUCESSO_SEM_COMPETENCIA", "SUCESSO_SEM_SERVICOS"}
 
 
 def normalizar_header(h: str) -> str:
@@ -326,7 +327,7 @@ def main():
         resultados.append({"empresa": empresa, "resultado": res, "inicio": res["inicio"], "fim": res["fim"]})
         salvar_report(resultados)
 
-        if cnpj_limpo:
+        if cnpj_limpo and res.get("status") in STATUS_SUCESSO:
             ja_processadas.add(cnpj_limpo)
             if USAR_CHECKPOINT:
                 processadas_checkpoint.add(cnpj_limpo)
@@ -334,15 +335,18 @@ def main():
 
     salvar_report(resultados)
     total = len(resultados)
-    ok = sum(1 for r in resultados if r["resultado"]["status"] in {"SUCESSO", "SUCESSO_SEM_COMPETENCIA", "SUCESSO_SEM_SERVICOS"})
+    ok = sum(1 for r in resultados if r["resultado"]["status"] in STATUS_SUCESSO)
     falha = total - ok
     print("\n" + "=" * 80)
     print(f"Processamento finalizado. Total={total} | Sucesso={ok} | Falha={falha}")
     print(f"Report: {REPORT_PATH}")
 
     if USAR_CHECKPOINT and os.path.exists(CHECKPOINT_PATH):
-        os.remove(CHECKPOINT_PATH)
-        print(f"Checkpoint removido ao final: {CHECKPOINT_PATH}")
+        if falha == 0:
+            os.remove(CHECKPOINT_PATH)
+            print(f"Checkpoint removido ao final: {CHECKPOINT_PATH}")
+        else:
+            print(f"Checkpoint mantido para retomada: {CHECKPOINT_PATH}")
 
 
 if __name__ == "__main__":
