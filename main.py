@@ -398,6 +398,11 @@ def _inferir_nf_por_proximidade(tr, col_data: int, col_nf: int, col_rps: int, nf
 
     candidatos = []
 
+    # Prioriza colunas explicitamente de NF antes de heurística por proximidade.
+    for c in (col_nf, col_nf + 1, 6, 7):
+        if c >= 0:
+            candidatos.append(c)
+
     # Em layouts conhecidos, NF costuma estar ~4 colunas antes de Data Emissão.
     for delta in (-4, -5, -3, -6, -2, 0, 1, -1):
         c = col_data + delta
@@ -405,12 +410,8 @@ def _inferir_nf_por_proximidade(tr, col_data: int, col_nf: int, col_rps: int, nf
             continue
         candidatos.append(c)
 
-    # Inclui colunas mapeadas/legado como fallback final.
-    for c in (col_nf, col_nf + 1, 6, 7):
-        if c >= 0:
-            candidatos.append(c)
-
     vistos = set()
+    candidatos_validos = []
     for c in candidatos:
         if c in vistos:
             continue
@@ -431,7 +432,13 @@ def _inferir_nf_por_proximidade(tr, col_data: int, col_nf: int, col_rps: int, nf
             continue
         if len(num) > 12:
             continue
-        return num
+        candidatos_validos.append(num)
+
+    for num in candidatos_validos:
+        if len(num) >= 3:
+            return num
+    if candidatos_validos:
+        return candidatos_validos[0]
 
     return nf_atual
 
@@ -479,7 +486,7 @@ def mapa_colunas_grid_lista(force=False):
                 col_map["chave"] = idx_td
             elif "rps" in titulo and "data" not in titulo and "serie" not in titulo and "série" not in titulo:
                 col_map["rps"] = idx_td
-            elif titulo == "nf" or titulo.startswith("nf "):
+            elif titulo == "nf":
                 col_map["nf"] = idx_td
         except Exception:
             continue
