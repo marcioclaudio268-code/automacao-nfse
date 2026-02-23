@@ -374,6 +374,57 @@ def td_text(tr, col):
     return (el.text or "").strip()
 
 
+def _texto_para_numero_limpo(txt: str) -> str:
+    return re.sub(r"\D", "", txt or "")
+
+
+def _nf_valido(nf: str) -> bool:
+    n = _texto_para_numero_limpo(nf)
+    return len(n) > 0
+
+
+def _inferir_nf_por_proximidade(tr, col_data: int, col_nf: int, col_rps: int, nf_atual: str, rps_atual: str):
+    """Fallback para recuperar NF quando coluna vem deslocada e NF fica vazia/inválida."""
+    if _nf_valido(nf_atual):
+        return nf_atual
+
+    rps_limpo = _texto_para_numero_limpo(rps_atual)
+    candidatos = []
+
+    # Em layouts conhecidos, NF costuma estar ~4 colunas antes de Data Emissão.
+    for delta in (-4, -5, -3, -6, -2, 0, 1, -1):
+        c = col_data + delta
+        if c < 0:
+            continue
+        candidatos.append(c)
+
+    # Inclui colunas mapeadas/legado como fallback final.
+    for c in (col_nf, col_nf + 1, 6, 7):
+        if c >= 0:
+            candidatos.append(c)
+
+    vistos = set()
+    for c in candidatos:
+        if c in vistos:
+            continue
+        vistos.add(c)
+        try:
+            txt = td_text(tr, c)
+        except Exception:
+            continue
+
+        num = _texto_para_numero_limpo(txt)
+        if not num:
+            continue
+        if rps_limpo and num == rps_limpo:
+            continue
+        if len(num) > 12:
+            continue
+        return num
+
+    return nf_atual
+
+
 def _normalizar_titulo_coluna(txt: str) -> str:
     txt = (txt or "").replace("\xa0", " ").strip().lower()
     txt = txt.replace("º", "o")
@@ -465,6 +516,15 @@ def extrair_info_linha(checkbox):
         }
         if parse_data_emissao_site(alt.get("data_emissao", "")):
             info.update(alt)
+
+    info["nf"] = _inferir_nf_por_proximidade(
+        tr,
+        col_data=col_data,
+        col_nf=col_nf,
+        col_rps=col_rps,
+        nf_atual=info.get("nf", ""),
+        rps_atual=info.get("rps", ""),
+    )
 
     return info
 

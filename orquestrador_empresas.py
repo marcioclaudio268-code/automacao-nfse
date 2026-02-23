@@ -207,46 +207,28 @@ def executar_empresa(empresa: dict):
             env=env,
         )
 
-        if proc.returncode == 0:
+        rc = int(proc.returncode)
+        sucesso_por_codigo = {
+            0: ("SUCESSO", "OK"),
+            EXIT_CODE_SEM_COMPETENCIA: ("SUCESSO_SEM_COMPETENCIA", "Sem notas na competência alvo"),
+            EXIT_CODE_SEM_SERVICOS: ("SUCESSO_SEM_SERVICOS", "Contribuinte sem módulo de Nota Fiscal"),
+            EXIT_CODE_CREDENCIAL_INVALIDA: ("SUCESSO", "Credencial inválida na prefeitura (revisar planilha)"),
+        }
+
+        if rc in sucesso_por_codigo:
+            status, motivo = sucesso_por_codigo[rc]
             return {
-                "status": "SUCESSO",
-                "motivo": "OK",
+                "status": status,
+                "motivo": motivo,
                 "tentativas": tentativa,
                 "inicio": inicio,
                 "fim": datetime.now(),
             }
 
-        if proc.returncode == EXIT_CODE_SEM_COMPETENCIA:
-            return {
-                "status": "SUCESSO_SEM_COMPETENCIA",
-                "motivo": "Sem notas na competência alvo",
-                "tentativas": tentativa,
-                "inicio": inicio,
-                "fim": datetime.now(),
-            }
-
-        if proc.returncode == EXIT_CODE_SEM_SERVICOS:
-            return {
-                "status": "SUCESSO_SEM_SERVICOS",
-                "motivo": "Contribuinte sem módulo de Nota Fiscal",
-                "tentativas": tentativa,
-                "inicio": inicio,
-                "fim": datetime.now(),
-            }
-
-        if proc.returncode == EXIT_CODE_CREDENCIAL_INVALIDA:
-            return {
-                "status": "SUCESSO",
-                "motivo": "Credencial inválida na prefeitura (revisar planilha)",
-                "tentativas": tentativa,
-                "inicio": inicio,
-                "fim": datetime.now(),
-            }
-
-        if proc.returncode == EXIT_CODE_CAPTCHA_TIMEOUT:
+        if rc == EXIT_CODE_CAPTCHA_TIMEOUT:
             ultimo_motivo = "Captcha não resolvido a tempo"
         else:
-            ultimo_motivo = f"Falha execução (exit={proc.returncode})"
+            ultimo_motivo = f"Falha execução (exit={rc})"
 
         print(f"Falha tentativa {tentativa}: {ultimo_motivo}")
 
