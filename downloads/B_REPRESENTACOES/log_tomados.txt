@@ -1,0 +1,5 @@
+# Log Serviços Tomados (uma linha por evento)
+[2026-03-01 18:49:45] STATUS=INICIO | REFERENCIA=01/2026 | MSG=Iniciando etapa Serviços Tomados
+[2026-03-01 18:49:47] STATUS=SUCESSO_SEM_TOMADOS | REFERENCIA=01/2026 | MSG=Nenhum registro para apresentação
+[2026-03-01 18:49:48] STATUS=FECHAMENTO_INICIO | REFERENCIA=01/2026 | MSG=Iniciando fechamento Tomados (cadeado/guia/livro)
+[2026-03-01 18:49:49] STATUS=FECHAMENTO_SEM_MOVIMENTO | REFERENCIA=01/2026 | MSG=Nenhum registro para apresentação

@@ -1,0 +1,27 @@
+timestamp=2026-03-01_18-51-11
+motivo=Exceção não tratada
+url/title=<erro ao coletar>
+exception=NoSuchWindowException: Message: no such window: target window already closed
+from unknown error: web view not found
+  (Session info: chrome=145.0.7632.117)
+Stacktrace:
+Symbols not available. Dumping unresolved backtrace:
+	0x7ff7bbc6aa55
+	0x7ff7bb9c8630
+	0x7ff7bb75d75d
+	0x7ff7bb7342a2
+	0x7ff7bb7e8e86
+	0x7ff7bb805282
+	0x7ff7bb7a9098
+	0x7ff7bb7a9f83
+	0x7ff7bbc97810
+	0x7ff7bbc91afd
+	0x7ff7bbcb2c1a
+	0x7ff7bb9e3345
+	0x7ff7bb9eb81c
+	0x7ff7bb9d1924
+	0x7ff7bb9d1ad6
+	0x7ff7bb9b7e47
+	0x7ffe6bb8e8d7
+	0x7ffe6d3ec40c
+

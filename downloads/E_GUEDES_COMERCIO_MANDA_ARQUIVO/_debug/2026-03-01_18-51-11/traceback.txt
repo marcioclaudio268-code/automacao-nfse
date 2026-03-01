@@ -1,0 +1,45 @@
+Traceback (most recent call last):
+  File "c:\NFS XML\NFS XML\automacao-nfse\main.py", line 2153, in <module>
+    main()
+  File "c:\NFS XML\NFS XML\automacao-nfse\main.py", line 1980, in main
+    preencher_login_prefeitura_se_habilitado()
+  File "c:\NFS XML\NFS XML\automacao-nfse\main.py", line 310, in preencher_login_prefeitura_se_habilitado
+    campo_usuario = wait.until(EC.presence_of_element_located((By.ID, LOGIN_CAMPO_USUARIO)))
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\marci\AppData\Local\Programs\Python\Python312\Lib\site-packages\selenium\webdriver\support\wait.py", line 112, in until
+    value = method(self._driver)
+            ^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\marci\AppData\Local\Programs\Python\Python312\Lib\site-packages\selenium\webdriver\support\expected_conditions.py", line 92, in _predicate
+    return driver.find_element(*locator)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\marci\AppData\Local\Programs\Python\Python312\Lib\site-packages\selenium\webdriver\remote\webdriver.py", line 816, in find_element
+    return self.execute(Command.FIND_ELEMENT, {"using": by, "value": value})["value"]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\marci\AppData\Local\Programs\Python\Python312\Lib\site-packages\selenium\webdriver\remote\webdriver.py", line 446, in execute
+    self.error_handler.check_response(response)
+  File "C:\Users\marci\AppData\Local\Programs\Python\Python312\Lib\site-packages\selenium\webdriver\remote\errorhandler.py", line 232, in check_response
+    raise exception_class(message, screen, stacktrace)
+selenium.common.exceptions.NoSuchWindowException: Message: no such window: target window already closed
+from unknown error: web view not found
+  (Session info: chrome=145.0.7632.117)
+Stacktrace:
+Symbols not available. Dumping unresolved backtrace:
+	0x7ff7bbc6aa55
+	0x7ff7bb9c8630
+	0x7ff7bb75d75d
+	0x7ff7bb7342a2
+	0x7ff7bb7e8e86
+	0x7ff7bb805282
+	0x7ff7bb7a9098
+	0x7ff7bb7a9f83
+	0x7ff7bbc97810
+	0x7ff7bbc91afd
+	0x7ff7bbcb2c1a
+	0x7ff7bb9e3345
+	0x7ff7bb9eb81c
+	0x7ff7bb9d1924
+	0x7ff7bb9d1ad6
+	0x7ff7bb9b7e47
+	0x7ffe6bb8e8d7
+	0x7ffe6d3ec40c
+

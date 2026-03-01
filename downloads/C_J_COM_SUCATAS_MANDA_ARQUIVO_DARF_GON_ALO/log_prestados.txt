@@ -1,0 +1,3 @@
+# Log Serviços Prestados - Fechamento (uma linha por evento)
+[2026-03-01 18:51:02] STATUS=INICIO | REFERENCIA=01/2026 | MSG=Iniciando fechamento Prestados (cadeado/livro)
+[2026-03-01 18:51:02] STATUS=ERRO | REFERENCIA=01/2026 | MSG=Message: invalid session id; For documentation on this error, please visit: https://www.selenium.dev/documentation/webdriver/troubleshooting/errors#invalidsessionidexception Stacktrace: Symbols not available. Dumping unresolved backtrace: 	0x7ff7bbc6

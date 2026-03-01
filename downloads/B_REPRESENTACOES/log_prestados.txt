@@ -1,0 +1,5 @@
+# Log Serviços Prestados - Fechamento (uma linha por evento)
+[2026-03-01 18:49:49] STATUS=INICIO | REFERENCIA=01/2026 | MSG=Iniciando fechamento Prestados (cadeado/livro)
+[2026-03-01 18:49:52] STATUS=SEM_CADEADO | REFERENCIA=01/2026 | MSG=Cadeado não disponível na competência (provavelmente já fechado)
+[2026-03-01 18:50:13] STATUS=LIVRO_ERRO | REFERENCIA=01/2026 | MSG=Message:  Stacktrace: Symbols not available. Dumping unresolved backtrace: 	0x7ff7bbc6aa55 	0x7ff7bb9c8630 	0x7ff7bb75d75d 	0x7ff7bb7b862e 	0x7ff7bb7b893c 	0x7ff7bb808d87 	0x7ff7bb80591c 	0x7ff7bb7a90
+[2026-03-01 18:50:13] STATUS=FECHAMENTO_OK | REFERENCIA=01/2026 | MSG=Fechamento Prestados finalizado
