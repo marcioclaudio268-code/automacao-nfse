@@ -49,9 +49,20 @@ TOMADOS_XML_BASENAME = "SERVICOS_TOMADOS_{mm_aaaa}.xml"  # ex: SERVICOS_TOMADOS_
 # EMPRESA_PASTA_FORCADA = "H2_IMOBILIARIA"
 EMPRESA_PASTA_FORCADA = os.environ.get("EMPRESA_PASTA_FORCADA", "")
 
+def _default_apuracao_referencia() -> str:
+    """Retorna MM/AAAA com base no mês anterior à data atual."""
+    agora = datetime.now()
+    ano = agora.year
+    mes = agora.month - 1
+    if mes == 0:
+        mes = 12
+        ano -= 1
+    return f"{mes:02d}/{ano}"
+
+
 # Competência alvo: por padrão, mês anterior ao mês atual (apuração).
 # Pode sobrescrever com APURACAO_REFERENCIA=MM/AAAA (ex.: 03/2026 -> alvo 02/2026).
-APURACAO_REFERENCIA = os.environ.get("APURACAO_REFERENCIA", "02/2026").strip()
+APURACAO_REFERENCIA = os.environ.get("APURACAO_REFERENCIA", _default_apuracao_referencia()).strip()
 
 PARAR_PROCESSAMENTO = False
 ENCONTROU_MES_ALVO = False

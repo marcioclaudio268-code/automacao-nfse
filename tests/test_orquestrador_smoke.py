@@ -109,3 +109,18 @@ def test_main_fluxo_pulado_nao_usa_variavel_res_inexistente(monkeypatch, tmp_pat
     oq.main()
 
     assert len(rows) == 1
+
+
+def test_executar_empresa_rc_desconhecido_anexa_resumo_saida(monkeypatch):
+    monkeypatch.setattr(oq, "MAX_TENTATIVAS", 1)
+    monkeypatch.setattr(
+        oq.subprocess,
+        "run",
+        lambda *args, **kwargs: SimpleNamespace(returncode=99, stdout="", stderr="erro importante de teste"),
+    )
+
+    res = oq.executar_empresa(_empresa_dummy())
+
+    assert res["status"] == "FALHA"
+    assert "exit=99" in res["motivo"]
+    assert "erro importante de teste" in res["motivo"]

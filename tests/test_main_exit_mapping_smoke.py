@@ -43,3 +43,12 @@ def test_map_runtime_error_to_exit_code_chrome_init():
 
 def test_map_runtime_error_to_exit_code_desconhecido():
     assert main.map_runtime_error_to_exit_code("ERRO_QUALQUER") is None
+
+
+def test_default_apuracao_referencia_formato():
+    ref = main._default_apuracao_referencia()
+    assert len(ref) == 7
+    assert ref[2] == "/"
+    mes, ano = ref.split("/")
+    assert mes.isdigit() and 1 <= int(mes) <= 12
+    assert ano.isdigit() and len(ano) == 4

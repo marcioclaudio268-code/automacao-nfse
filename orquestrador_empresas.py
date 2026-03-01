@@ -428,7 +428,11 @@ def executar_empresa(empresa: dict):
             print(f"Falha tentativa {tentativa}: {ultimo_motivo}")
             break
 
-        ultimo_motivo = f"Falha execucao (exit={rc})"
+        resumo_saida = " ".join((proc.stderr or proc.stdout or "").strip().split())[:160]
+        if resumo_saida:
+            ultimo_motivo = f"Falha execucao (exit={rc}): {resumo_saida}"
+        else:
+            ultimo_motivo = f"Falha execucao (exit={rc})"
         print(f"Falha tentativa {tentativa}: {ultimo_motivo}")
         tentativa_consumida += 1
 
