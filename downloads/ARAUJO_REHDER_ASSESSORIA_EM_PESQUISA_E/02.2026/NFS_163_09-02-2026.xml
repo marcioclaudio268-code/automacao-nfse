@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<NFSe xmlns="http://www.sped.fazenda.gov.br/nfse" versao="1.00">
+<infNFSe Id="NFS35060031241316446000107000000000016326020519677042">
+<xLocEmi>BAURU</xLocEmi>
+<xLocPrestacao>Bauru</xLocPrestacao>
+<nNFSe>163</nNFSe>
+<cLocIncid>3506003</cLocIncid>
+<xLocIncid>Bauru</xLocIncid>
+<xTribNac>Instrução, treinamento, orientação pedagógica e educacional, avaliação de conhecimentos de qualquer natureza.</xTribNac>
+<verAplic>SilTecnologia_v1.00</verAplic>
+<ambGer>1</ambGer>
+<tpEmis>2</tpEmis>
+<cStat>100</cStat>
+<dhProc>2026-02-09T00:00:00-03:00</dhProc>
+<nDFSe>51967704</nDFSe>
+<emit>
+<CNPJ>41316446000107</CNPJ>
+<IM>606187</IM>
+<xNome>ARAUJO &amp; REHDER ASSESSORIA EM PESQUISA E ODONTOLOGIA LTDA</xNome>
+<enderNac>
+<xLgr>17014-350 - RUA ALFREDO RUIZ, 12-39</xLgr>
+<nro>0</nro>
+<xBairro>VILA MESQUITA</xBairro>
+<cMun>3506003</cMun>
+<UF>SP</UF>
+<CEP>17014350</CEP>
+</enderNac>
+<fone>1432332030</fone>
+<email>contratos@jrassessoria.com.br</email>
+</emit>
+<valores>
+<vBC>3489.90</vBC>
+<pAliqAplic>2.97</pAliqAplic>
+<vISSQN>103.65</vISSQN>
+<vLiq>3489.90</vLiq>
+</valores>
+<DPS versao="1.00">
+<infDPS Id="DPS350600324131644600010749999000000000000163">
+<tpAmb>1</tpAmb>
+<dhEmi>2026-02-09T00:00:00-03:00</dhEmi>
+<verAplic>SilTecnologia_v1.00</verAplic>
+<serie>49999</serie>
+<nDPS>163</nDPS>
+<dCompet>2026-02-01</dCompet>
+<tpEmit>1</tpEmit>
+<cLocEmi>3506003</cLocEmi>
+<prest>
+<CNPJ>41316446000107</CNPJ>
+<IM>606187</IM>
+<fone>1432332030</fone>
+<email>contratos@jrassessoria.com.br</email>
+<regTrib>
+<opSimpNac>3</opSimpNac>
+<regApTribSN/>
+<regEspTrib>0</regEspTrib>
+</regTrib>
+</prest>
+<toma>
+<CNPJ>00489050002985</CNPJ>
+<xNome>JJGC IND E COM DE MAT DENTARIOS S/A</xNome>
+<end>
+<endNac>
+<cMun>4106902</cMun>
+<CEP>80420100</CEP>
+</endNac>
+<xLgr>RUA BENJAMIN LINS</xLgr>
+<nro>742</nro>
+<xBairro>BATEL</xBairro>
+</end>
+</toma>
+<serv>
+<locPrest>
+<cLocPrestacao>3506003</cLocPrestacao>
+</locPrest>
+<cServ>
+<cTribNac>080201</cTribNac>
+<xDescServ>ASSESSORIA E CONSULTORIA CIENTIFICA E ODONTOLÓGICA NO DESENVOLVIMENTO DE PRODUTOS CONSULTOR: DRA. MARIA ANGELICA REHDER DE ARAUJO
+DADOS PARA DEPOSITO: BANCO ITAU AG.1657 CC.99839-7 NUMERO PEDIDO 4515602669</xDescServ>
+<cNBS>122051900</cNBS>
+</cServ>
+</serv>
+<valores>
+<vServPrest>
+<vServ>3489.90</vServ>
+</vServPrest>
+<trib>
+<tribMun>
+<tribISSQN>1</tribISSQN>
+<tpRetISSQN>1</tpRetISSQN>
+</tribMun>
+<tribFed>
+<piscofins>
+<CST>00</CST>
+</piscofins>
+</tribFed>
+<totTrib>
+<vTotTrib>
+<vTotTribFed>0.00</vTotTribFed>
+<vTotTribEst>0.00</vTotTribEst>
+<vTotTribMun>103.65</vTotTribMun>
+</vTotTrib>
+</totTrib>
+</trib>
+</valores>
+</infDPS>
+</DPS>
+</infNFSe>
+</NFSe>
+

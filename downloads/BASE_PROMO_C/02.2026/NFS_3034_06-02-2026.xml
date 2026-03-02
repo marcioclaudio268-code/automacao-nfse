@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<NFSe xmlns="http://www.sped.fazenda.gov.br/nfse" versao="1.00">
+<infNFSe Id="NFS35060031213619319000141000000000303426020518448134">
+<xLocEmi>BAURU</xLocEmi>
+<xLocPrestacao>Bauru</xLocPrestacao>
+<nNFSe>3034</nNFSe>
+<cLocIncid>3506003</cLocIncid>
+<xLocIncid>Bauru</xLocIncid>
+<xTribNac>Propaganda e publicidade, inclusive promoção de vendas, planejamento de campanhas ou sistemas de publicidade, elaboração de desenhos, textos e demais materiais publicitários.</xTribNac>
+<verAplic>SilTecnologia_v1.00</verAplic>
+<ambGer>1</ambGer>
+<tpEmis>2</tpEmis>
+<cStat>100</cStat>
+<dhProc>2026-02-06T00:00:00-03:00</dhProc>
+<nDFSe>51844813</nDFSe>
+<emit>
+<CNPJ>13619319000141</CNPJ>
+<IM>520120</IM>
+<xNome>BASE PROMO COMERCIAL LTDA</xNome>
+<enderNac>
+<xLgr>17063-010 - RUA ALTO JURUA, 17-22  SALA A</xLgr>
+<nro>0</nro>
+<xBairro>VILA LEMOS</xBairro>
+<cMun>3506003</cMun>
+<UF>SP</UF>
+<CEP>17063010</CEP>
+</enderNac>
+<fone>1432358907</fone>
+<email>contratos@jrassessoria.com.br</email>
+</emit>
+<valores>
+<vBC>2700.00</vBC>
+<pAliqAplic>3.14</pAliqAplic>
+<vISSQN>84.78</vISSQN>
+<vTotalRet>84.78</vTotalRet>
+<vLiq>2615.22</vLiq>
+</valores>
+<DPS versao="1.00">
+<infDPS Id="DPS350600321361931900014149999000000000003034">
+<tpAmb>1</tpAmb>
+<dhEmi>2026-02-06T00:00:00-03:00</dhEmi>
+<verAplic>SilTecnologia_v1.00</verAplic>
+<serie>49999</serie>
+<nDPS>3034</nDPS>
+<dCompet>2026-02-01</dCompet>
+<tpEmit>1</tpEmit>
+<cLocEmi>3506003</cLocEmi>
+<prest>
+<CNPJ>13619319000141</CNPJ>
+<IM>520120</IM>
+<fone>1432358907</fone>
+<email>contratos@jrassessoria.com.br</email>
+<regTrib>
+<opSimpNac>3</opSimpNac>
+<regApTribSN/>
+<regEspTrib>0</regEspTrib>
+</regTrib>
+</prest>
+<toma>
+<CNPJ>20713105000103</CNPJ>
+<xNome>GSBRU ADMINISTRACAO DE CONDOMINIOS, TECNOLOGIA E SERVICOS LTDA</xNome>
+<end>
+<endNac>
+<cMun>3506003</cMun>
+<CEP>17018390</CEP>
+</endNac>
+<xLgr>RUA FLAVIANO REIS</xLgr>
+<nro>457</nro>
+<xBairro>VILA AVIAÇÃO</xBairro>
+</end>
+</toma>
+<serv>
+<locPrest>
+<cLocPrestacao>3506003</cLocPrestacao>
+</locPrest>
+<cServ>
+<cTribNac>170601</cTribNac>
+<xDescServ>NF REF PARCELA ASSESSORIA MENSAL DE PUBLICIDADE PARA GSBRU / POSITANO
+APROVADA NA PROPOSTA DA AGENCIA BASE PROMO DE 06/08/25.
+.
+VENCIMENTO DA PARCELA: 20/02/2026
+PAGAMENTO VAI BANCO ITAU
+AGENCIA 1657
+CONTA 24233-3
+PIX: 13.619.319/0001-41</xDescServ>
+<cNBS>114061100</cNBS>
+</cServ>
+</serv>
+<valores>
+<vServPrest>
+<vServ>2700.00</vServ>
+</vServPrest>
+<trib>
+<tribMun>
+<tribISSQN>1</tribISSQN>
+<tpRetISSQN>2</tpRetISSQN>
+</tribMun>
+<tribFed/>
+<totTrib>
+<vTotTrib>
+<vTotTribFed>0.00</vTotTribFed>
+<vTotTribEst>0.00</vTotTribEst>
+<vTotTribMun>84.78</vTotTribMun>
+</vTotTrib>
+</totTrib>
+</trib>
+</valores>
+</infDPS>
+</DPS>
+</infNFSe>
+</NFSe>
+

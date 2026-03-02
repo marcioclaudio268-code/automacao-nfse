@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<NFSe xmlns="http://www.sped.fazenda.gov.br/nfse" versao="1.00">
+<infNFSe Id="NFS35060031250157244000150000000000018226020518634774">
+<xLocEmi>BAURU</xLocEmi>
+<xLocPrestacao>São Carlos</xLocPrestacao>
+<nNFSe>182</nNFSe>
+<cLocIncid>3506003</cLocIncid>
+<xLocIncid>Bauru</xLocIncid>
+<xTribNac>Fonoaudiologia.</xTribNac>
+<verAplic>SilTecnologia_v1.00</verAplic>
+<ambGer>1</ambGer>
+<tpEmis>2</tpEmis>
+<cStat>100</cStat>
+<dhProc>2026-02-06T00:00:00-03:00</dhProc>
+<nDFSe>51863477</nDFSe>
+<emit>
+<CNPJ>50157244000150</CNPJ>
+<IM>630967</IM>
+<xNome>E P I D FONOAUDIOLOGIA LTDA</xNome>
+<enderNac>
+<xLgr>17015-341 - RUA ARAUJO LEITE, 16-19</xLgr>
+<nro>0</nro>
+<xBairro>CENTRO</xBairro>
+<cMun>3506003</cMun>
+<UF>SP</UF>
+<CEP>17015341</CEP>
+</enderNac>
+<fone>1432332030</fone>
+<email>CONTRATOS@JRASSESSORIA.COM.BR</email>
+</emit>
+<valores>
+<vBC>450.00</vBC>
+<pAliqAplic>2.00</pAliqAplic>
+<vISSQN>9.00</vISSQN>
+<vLiq>450.00</vLiq>
+</valores>
+<DPS versao="1.00">
+<infDPS Id="DPS350600325015724400015049999000000000000182">
+<tpAmb>1</tpAmb>
+<dhEmi>2026-02-06T00:00:00-03:00</dhEmi>
+<verAplic>SilTecnologia_v1.00</verAplic>
+<serie>49999</serie>
+<nDPS>182</nDPS>
+<dCompet>2026-02-01</dCompet>
+<tpEmit>1</tpEmit>
+<cLocEmi>3506003</cLocEmi>
+<prest>
+<CNPJ>50157244000150</CNPJ>
+<IM>630967</IM>
+<fone>1432332030</fone>
+<email>CONTRATOS@JRASSESSORIA.COM.BR</email>
+<regTrib>
+<opSimpNac>3</opSimpNac>
+<regApTribSN/>
+<regEspTrib>0</regEspTrib>
+</regTrib>
+</prest>
+<toma>
+<CPF>06424211616</CPF>
+<xNome>Marcio Pereira de Almeida</xNome>
+<end>
+<endNac>
+<cMun>3548906</cMun>
+<CEP>13567140</CEP>
+</endNac>
+<xLgr>Rua Francisco Stella</xLgr>
+<nro>446</nro>
+<xBairro>Chacara Parque Club</xBairro>
+</end>
+</toma>
+<serv>
+<locPrest>
+<cLocPrestacao>3548906</cLocPrestacao>
+</locPrest>
+<cServ>
+<cTribNac>040803</cTribNac>
+<xDescServ>Sessões de Fonoaudiologia
+Paciente: Gabriel Carraro de Almeida
+Data do atendimento: 09/01; 17/01; 31/01/2025
+Valor da sessão individual : $150,00
+</xDescServ>
+<cNBS>123019900</cNBS>
+</cServ>
+</serv>
+<valores>
+<vServPrest>
+<vServ>450.00</vServ>
+</vServPrest>
+<trib>
+<tribMun>
+<tribISSQN>1</tribISSQN>
+<tpRetISSQN>1</tpRetISSQN>
+</tribMun>
+<tribFed/>
+<totTrib>
+<vTotTrib>
+<vTotTribFed>0.00</vTotTribFed>
+<vTotTribEst>0.00</vTotTribEst>
+<vTotTribMun>9.00</vTotTribMun>
+</vTotTrib>
+</totTrib>
+</trib>
+</valores>
+</infDPS>
+</DPS>
+</infNFSe>
+</NFSe>
+

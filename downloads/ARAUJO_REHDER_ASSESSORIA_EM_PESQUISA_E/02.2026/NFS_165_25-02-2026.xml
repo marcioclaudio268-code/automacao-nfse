@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<NFSe xmlns="http://www.sped.fazenda.gov.br/nfse" versao="1.00">
+<infNFSe Id="NFS35060031241316446000107000000000016526020522493752">
+<xLocEmi>BAURU</xLocEmi>
+<xLocPrestacao>Bauru</xLocPrestacao>
+<nNFSe>165</nNFSe>
+<cLocIncid>3506003</cLocIncid>
+<xLocIncid>Bauru</xLocIncid>
+<xTribNac>Serviços de pesquisas e desenvolvimento de qualquer natureza.</xTribNac>
+<verAplic>SilTecnologia_v1.00</verAplic>
+<ambGer>1</ambGer>
+<tpEmis>2</tpEmis>
+<cStat>100</cStat>
+<dhProc>2026-02-25T00:00:00-03:00</dhProc>
+<nDFSe>52249375</nDFSe>
+<emit>
+<CNPJ>41316446000107</CNPJ>
+<IM>606187</IM>
+<xNome>ARAUJO &amp; REHDER ASSESSORIA EM PESQUISA E ODONTOLOGIA LTDA</xNome>
+<enderNac>
+<xLgr>17014-350 - RUA ALFREDO RUIZ, 12-39</xLgr>
+<nro>0</nro>
+<xBairro>VILA MESQUITA</xBairro>
+<cMun>3506003</cMun>
+<UF>SP</UF>
+<CEP>17014350</CEP>
+</enderNac>
+<fone>1432332030</fone>
+<email>contratos@jrassessoria.com.br</email>
+</emit>
+<valores>
+<vBC>7837.50</vBC>
+<pAliqAplic>2.97</pAliqAplic>
+<vISSQN>232.77</vISSQN>
+<vTotalRet>232.77</vTotalRet>
+<vLiq>7604.73</vLiq>
+</valores>
+<DPS versao="1.00">
+<infDPS Id="DPS350600324131644600010749999000000000000165">
+<tpAmb>1</tpAmb>
+<dhEmi>2026-02-25T00:00:00-03:00</dhEmi>
+<verAplic>SilTecnologia_v1.00</verAplic>
+<serie>49999</serie>
+<nDPS>165</nDPS>
+<dCompet>2026-02-01</dCompet>
+<tpEmit>1</tpEmit>
+<cLocEmi>3506003</cLocEmi>
+<prest>
+<CNPJ>41316446000107</CNPJ>
+<IM>606187</IM>
+<fone>1432332030</fone>
+<email>contratos@jrassessoria.com.br</email>
+<regTrib>
+<opSimpNac>3</opSimpNac>
+<regApTribSN/>
+<regEspTrib>0</regEspTrib>
+</regTrib>
+</prest>
+<toma>
+<CNPJ>50839620000197</CNPJ>
+<xNome>FUNDACAO BAURUENSE DE ESTUDOS ODONTOLOGICOS</xNome>
+<end>
+<endNac>
+<cMun>3506003</cMun>
+<CEP>17012160</CEP>
+</endNac>
+<xLgr>MARIA JOSE</xLgr>
+<nro>60</nro>
+<xCpl>QUADRA 12</xCpl>
+<xBairro>VILA ALTINOPOLIS</xBairro>
+</end>
+</toma>
+<serv>
+<locPrest>
+<cLocPrestacao>3506003</cLocPrestacao>
+</locPrest>
+<cServ>
+<cTribNac>020101</cTribNac>
+<xDescServ>Curso : Especialização em Prótese Dentária
+Referente: Ministração de aulas
+Nº Convenio: 1018106 + aditivo 1018938
+Módulo do curso: 13/fevereiro-2026
+Docentes Ministrantes: Carlos dos Reis Pereira de Araújo - valor bruto: R$7.837,50
+
+
+ARAUJO &amp; REHDER ASSESSORIA EM PESQUISA E ODONTOLOGIA LTDA Chave Pix: 41.316.446/0001-07</xDescServ>
+<cNBS>112014000</cNBS>
+</cServ>
+</serv>
+<valores>
+<vServPrest>
+<vServ>7837.50</vServ>
+</vServPrest>
+<trib>
+<tribMun>
+<tribISSQN>1</tribISSQN>
+<tpRetISSQN>2</tpRetISSQN>
+</tribMun>
+<tribFed/>
+<totTrib>
+<vTotTrib>
+<vTotTribFed>0.00</vTotTribFed>
+<vTotTribEst>0.00</vTotTribEst>
+<vTotTribMun>232.77</vTotTribMun>
+</vTotTrib>
+</totTrib>
+</trib>
+</valores>
+</infDPS>
+</DPS>
+</infNFSe>
+</NFSe>
+

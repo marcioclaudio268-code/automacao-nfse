@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<NFSe xmlns="http://www.sped.fazenda.gov.br/nfse" versao="1.00">
+<infNFSe Id="NFS35060031203222292000103000000000151026020516776400">
+<xLocEmi>BAURU</xLocEmi>
+<xLocPrestacao>Bauru</xLocPrestacao>
+<nNFSe>1510</nNFSe>
+<cLocIncid>3506003</cLocIncid>
+<xLocIncid>Bauru</xLocIncid>
+<xTribNac>Execução, por administração, de obras de construção civil, hidráulica ou elétrica e de outras obras semelhantes, inclusive sondagem, perfuração de poços, escavação, drenagem e irrigação, terraplanagem, pavimentação, concretagem e a instalação e montagem de produtos, peças e equipamentos (exceto o fornecimento de mercadorias produzidas pelo prestador de serviços fora do local da prestação dos serviços, que fica sujeito ao ICMS).</xTribNac>
+<verAplic>SilTecnologia_v1.00</verAplic>
+<ambGer>1</ambGer>
+<tpEmis>2</tpEmis>
+<cStat>100</cStat>
+<dhProc>2026-02-02T00:00:00-03:00</dhProc>
+<nDFSe>51677640</nDFSe>
+<emit>
+<CNPJ>03222292000103</CNPJ>
+<IM>66045</IM>
+<xNome>CONSTRUFIC CONSTRUTORA LTDA</xNome>
+<enderNac>
+<xLgr>17017-383 - AVENIDA GETULIO VARGAS, 21-51  sala 46</xLgr>
+<nro>0</nro>
+<xBairro>JD. EUROPA</xBairro>
+<cMun>3506003</cMun>
+<UF>SP</UF>
+<CEP>17017383</CEP>
+</enderNac>
+<fone>1432358900</fone>
+<email>fiscal2@jrassessoria.com.br</email>
+</emit>
+<valores>
+<vBC>7300.00</vBC>
+<pAliqAplic>3.77</pAliqAplic>
+<vISSQN>275.21</vISSQN>
+<vTotalRet>275.21</vTotalRet>
+<vLiq>7024.79</vLiq>
+</valores>
+<DPS versao="1.00">
+<infDPS Id="DPS350600320322229200010349999000000000001510">
+<tpAmb>1</tpAmb>
+<dhEmi>2026-02-02T00:00:00-03:00</dhEmi>
+<verAplic>SilTecnologia_v1.00</verAplic>
+<serie>49999</serie>
+<nDPS>1510</nDPS>
+<dCompet>2026-02-01</dCompet>
+<tpEmit>1</tpEmit>
+<cLocEmi>3506003</cLocEmi>
+<prest>
+<CNPJ>03222292000103</CNPJ>
+<IM>66045</IM>
+<fone>1432358900</fone>
+<email>fiscal2@jrassessoria.com.br</email>
+<regTrib>
+<opSimpNac>3</opSimpNac>
+<regApTribSN/>
+<regEspTrib>0</regEspTrib>
+</regTrib>
+</prest>
+<toma>
+<CNPJ>59996553000199</CNPJ>
+<xNome>SEAAC de Bauru e Região</xNome>
+<end>
+<endNac>
+<cMun>3506003</cMun>
+<CEP>17013011</CEP>
+</endNac>
+<xLgr>Rua Batista de Carvalho</xLgr>
+<nro>12-43</nro>
+<xBairro>Vila Bonfim</xBairro>
+</end>
+</toma>
+<serv>
+<locPrest>
+<cLocPrestacao>3506003</cLocPrestacao>
+</locPrest>
+<cServ>
+<cTribNac>070201</cTribNac>
+<xDescServ>Referente a administração da construção de Espaço de Lazer localizado na Rua Batista de Carvalho , 12-49, Vila Bonfim, Bauru.
+CNO:90.026.73592/73</xDescServ>
+<cNBS>101012900</cNBS>
+</cServ>
+<obra>
+<end>
+<CEP>17013011</CEP>
+<xLgr>Rua Batista de Carvalho</xLgr>
+<nro>12-49</nro>
+<xBairro>Vila Bonfim</xBairro>
+</end>
+</obra>
+</serv>
+<valores>
+<vServPrest>
+<vServ>7300.00</vServ>
+</vServPrest>
+<trib>
+<tribMun>
+<tribISSQN>1</tribISSQN>
+<tpRetISSQN>2</tpRetISSQN>
+</tribMun>
+<tribFed/>
+<totTrib>
+<vTotTrib>
+<vTotTribFed>0.00</vTotTribFed>
+<vTotTribEst>0.00</vTotTribEst>
+<vTotTribMun>275.21</vTotTribMun>
+</vTotTrib>
+</totTrib>
+</trib>
+</valores>
+</infDPS>
+</DPS>
+</infNFSe>
+</NFSe>
+

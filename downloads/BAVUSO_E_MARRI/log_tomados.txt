@@ -1,0 +1,3 @@
+# Log Serviços Tomados (uma linha por evento)
+[2026-03-02 11:14:25] STATUS=INICIO | REFERENCIA=02/2026 | MSG=Iniciando etapa Serviços Tomados
+[2026-03-02 11:14:28] STATUS=SUCESSO_SEM_TOMADOS | REFERENCIA=02/2026 | MSG=Referência não encontrada na Declaração Fiscal

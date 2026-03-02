@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<NFSe xmlns="http://www.sped.fazenda.gov.br/nfse" versao="1.00">
+<infNFSe Id="NFS35060031245023959000180000000000131026020522361377">
+<xLocEmi>BAURU</xLocEmi>
+<xLocPrestacao>Bauru</xLocPrestacao>
+<nNFSe>1310</nNFSe>
+<cLocIncid>3506003</cLocIncid>
+<xLocIncid>Bauru</xLocIncid>
+<xTribNac>Serviços de desembaraço aduaneiro, comissários, despachantes e congêneres.</xTribNac>
+<verAplic>SilTecnologia_v1.00</verAplic>
+<ambGer>1</ambGer>
+<tpEmis>2</tpEmis>
+<cStat>100</cStat>
+<dhProc>2026-02-24T00:00:00-03:00</dhProc>
+<nDFSe>52236137</nDFSe>
+<emit>
+<CNPJ>45023959000180</CNPJ>
+<IM>4383</IM>
+<xNome>DESPACHANTE DOCUMENTALISTA VICENTINI LTDA</xNome>
+<enderNac>
+<xLgr>17014-400 - RUA AZARIAS LEITE, 18-45  LOJA 5 LOJA EDIFICIO SPAZIO D ORO EDIF</xLgr>
+<nro>0</nro>
+<xBairro>VILA MESQUITA</xBairro>
+<cMun>3506003</cMun>
+<UF>SP</UF>
+<CEP>17014400</CEP>
+</enderNac>
+<fone>1432230111</fone>
+<email>CONTATO@JRASSESSORIA.COM.BR</email>
+</emit>
+<valores>
+<vBC>849.91</vBC>
+<pAliqAplic>2.00</pAliqAplic>
+<vISSQN>17.00</vISSQN>
+<vTotalRet>17.00</vTotalRet>
+<vLiq>832.91</vLiq>
+</valores>
+<DPS versao="1.00">
+<infDPS Id="DPS350600324502395900018049999000000000001310">
+<tpAmb>1</tpAmb>
+<dhEmi>2026-02-24T00:00:00-03:00</dhEmi>
+<verAplic>SilTecnologia_v1.00</verAplic>
+<serie>49999</serie>
+<nDPS>1310</nDPS>
+<dCompet>2026-02-01</dCompet>
+<tpEmit>1</tpEmit>
+<cLocEmi>3506003</cLocEmi>
+<prest>
+<CNPJ>45023959000180</CNPJ>
+<IM>4383</IM>
+<fone>1432230111</fone>
+<email>CONTATO@JRASSESSORIA.COM.BR</email>
+<regTrib>
+<opSimpNac>3</opSimpNac>
+<regApTribSN/>
+<regEspTrib>0</regEspTrib>
+</regTrib>
+</prest>
+<toma>
+<CNPJ>24599277000140</CNPJ>
+<xNome>YASU TRANSPORTES E LOGISTICA LTDA</xNome>
+<end>
+<endNac>
+<cMun>3506003</cMun>
+<CEP>17025360</CEP>
+</endNac>
+<xLgr>RUA AUGUSTO FERREIRA 3-47</xLgr>
+<nro>47</nro>
+<xCpl>q3</xCpl>
+<xBairro>VL SANTA LUZIA</xBairro>
+</end>
+</toma>
+<serv>
+<locPrest>
+<cLocPrestacao>3506003</cLocPrestacao>
+</locPrest>
+<cServ>
+<cTribNac>330101</cTribNac>
+<xDescServ>LICENCIAMENTO INICIAL COM PLACA REFERENTE O VEÍCULO DE PLACA UFQ4J94</xDescServ>
+<cNBS>102040000</cNBS>
+</cServ>
+</serv>
+<valores>
+<vServPrest>
+<vServ>849.91</vServ>
+</vServPrest>
+<trib>
+<tribMun>
+<tribISSQN>1</tribISSQN>
+<tpRetISSQN>2</tpRetISSQN>
+</tribMun>
+<tribFed/>
+<totTrib>
+<vTotTrib>
+<vTotTribFed>0.00</vTotTribFed>
+<vTotTribEst>0.00</vTotTribEst>
+<vTotTribMun>17.00</vTotTribMun>
+</vTotTrib>
+</totTrib>
+</trib>
+</valores>
+</infDPS>
+</DPS>
+</infNFSe>
+</NFSe>
+
