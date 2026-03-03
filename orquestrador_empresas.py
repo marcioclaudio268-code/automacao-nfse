@@ -11,6 +11,7 @@ from datetime import datetime
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CSV_EMPRESAS = os.environ.get("EMPRESAS_ARQUIVO", os.environ.get("EMPRESAS_CSV", "empresas.xlsx"))
 REPORT_PATH = os.path.join(BASE_DIR, "report_execucao_empresas.csv")
+REPORT_MULTIPLAS_PATH = os.path.join(BASE_DIR, "report_empresas_multiplas.csv")
 CHECKPOINT_PATH = os.path.join(BASE_DIR, "checkpoint_execucao_empresas.json")
 MAX_TENTATIVAS = int(os.environ.get("MAX_TENTATIVAS_EMPRESA", "3"))
 LOGIN_WAIT_SECONDS = int(os.environ.get("LOGIN_WAIT_SECONDS", "120"))
@@ -22,8 +23,11 @@ EXIT_CODE_CAPTCHA_TIMEOUT = 30
 EXIT_CODE_SEM_COMPETENCIA = 40
 EXIT_CODE_SEM_SERVICOS = 41
 EXIT_CODE_CREDENCIAL_INVALIDA = 50
+EXIT_CODE_EMPRESA_MULTIPLA = 51
 EXIT_CODE_TOMADOS_FALHA = 42
 EXIT_CODE_CHROME_INIT_FALHA = 60
+MSG_ALERTA_TOMADOS = "ALERTA_TOMADOS_FECHADO"
+MSG_ALERTA_PRESTADOS = "ALERTA_PRESTADOS_FECHADO"
 STATUS_SUCESSO = {"SUCESSO", "SUCESSO_SEM_COMPETENCIA", "SUCESSO_SEM_SERVICOS"}
 
 
@@ -280,6 +284,8 @@ def executar_empresa(empresa: dict):
                 env=env,
                 cwd=BASE_DIR,
                 timeout=TIMEOUT_PROCESSO_MAIN,
+                capture_output=True,
+                text=True,
             )
         except subprocess.TimeoutExpired:
             ultimo_motivo = f"Timeout de execucao do main.py (> {TIMEOUT_PROCESSO_MAIN}s)"
@@ -292,10 +298,19 @@ def executar_empresa(empresa: dict):
             EXIT_CODE_SEM_COMPETENCIA: ("SUCESSO_SEM_COMPETENCIA", "Sem notas na competencia alvo"),
             EXIT_CODE_SEM_SERVICOS: ("SUCESSO_SEM_SERVICOS", "Contribuinte sem modulo de Nota Fiscal"),
             EXIT_CODE_CREDENCIAL_INVALIDA: ("SUCESSO", "Revisar manualmente: credencial inválida (usuário/senha) no portal"),
+            EXIT_CODE_EMPRESA_MULTIPLA: ("SUCESSO", "Revisar manualmente: EMPRESA_MULTIPLA (Cadastros Relacionados)"),
         }
 
         if rc in sucesso_por_codigo:
             status, motivo = sucesso_por_codigo[rc]
+            saida = "\n".join([(proc.stdout or ""), (proc.stderr or "")])
+            alertas = []
+            if MSG_ALERTA_TOMADOS in saida:
+                alertas.append("tomados")
+            if MSG_ALERTA_PRESTADOS in saida:
+                alertas.append("prestados")
+            if alertas:
+                motivo = f"{motivo} FECHADO com alertas: {', '.join(alertas)}"
             return {
                 "status": status,
                 "motivo": motivo,
@@ -369,6 +384,26 @@ def append_report_row(path_report: str, row):
         ])
 
 
+def append_report_multiplas_row(path_report_multiplas: str, row):
+    os.makedirs(os.path.dirname(path_report_multiplas) or ".", exist_ok=True)
+    novo_arquivo = not os.path.exists(path_report_multiplas)
+    with open(path_report_multiplas, "a", newline="", encoding="utf-8-sig") as f:
+        w = csv.writer(f, delimiter=';')
+        if novo_arquivo:
+            w.writerow(["timestamp", "codigo_empresa", "razao_social", "cnpj", "motivo"])
+        w.writerow([
+            row["fim"].strftime("%Y-%m-%d %H:%M:%S"),
+            row["empresa"]["codigo"],
+            row["empresa"]["razao_social"],
+            row["empresa"]["cnpj"],
+            row["resultado"]["motivo"],
+        ])
+
+
+def atualizar_resumo_falhas_parcial(_resultados):
+    return None
+
+
 def main():
     if not os.path.exists(CSV_EMPRESAS):
         print(f"Arquivo de empresas nÃ£o encontrado: {CSV_EMPRESAS}")
@@ -432,6 +467,7 @@ def main():
                 resultados.append(row)
                 cnpjs_ja_no_report.add(cnpj_limpo)
                 append_report_row(REPORT_PATH, row)
+                atualizar_resumo_falhas_parcial(resultados)
                 continue
 
             try:
@@ -451,6 +487,9 @@ def main():
             if cnpj_limpo:
                 cnpjs_ja_no_report.add(cnpj_limpo)
             append_report_row(REPORT_PATH, row)
+            if "EMPRESA_MULTIPLA" in (res.get("motivo") or ""):
+                append_report_multiplas_row(REPORT_MULTIPLAS_PATH, row)
+            atualizar_resumo_falhas_parcial(resultados)
 
             if cnpj_limpo and res.get("status") in STATUS_SUCESSO:
                 ja_processadas.add(cnpj_limpo)

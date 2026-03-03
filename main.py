@@ -69,10 +69,12 @@ MSG_CAPTCHA_INCORRETO = "CAPTCHA_INCORRETO"
 MSG_SEM_COMPETENCIA = "SUCESSO_SEM_COMPETENCIA"
 MSG_SEM_SERVICOS = "SUCESSO_SEM_SERVICOS"
 MSG_CREDENCIAL_INVALIDA = "CREDENCIAL_INVALIDA"
+MSG_EMPRESA_MULTIPLA = "EMPRESA_MULTIPLA"
 EXIT_CODE_CAPTCHA_TIMEOUT = 30
 EXIT_CODE_SEM_COMPETENCIA = 40
 EXIT_CODE_SEM_SERVICOS = 41
 EXIT_CODE_CREDENCIAL_INVALIDA = 50
+EXIT_CODE_EMPRESA_MULTIPLA = 51
 MSG_TOMADOS_FALHA = "FALHA_TOMADOS"
 EXIT_CODE_TOMADOS_FALHA = 42
 TOMADOS_OBRIGATORIO = os.environ.get("TOMADOS_OBRIGATORIO", "0").strip() == "1"
@@ -314,7 +316,9 @@ def preencher_login_prefeitura_se_habilitado():
     navegar_para_lista_nota_fiscal()
 
 
-if not AUTO_LOGIN_PREFEITURA:
+def aguardar_login_manual_se_necessario():
+    if AUTO_LOGIN_PREFEITURA:
+        return
     print("Entre manualmente em: Nota Fiscal - Lista Nota Fiscais")
     print(f"Você tem {login_wait_seconds} segundos para iniciar manualmente.")
     sleep(login_wait_seconds)
@@ -890,9 +894,18 @@ def detectar_nome_empresa_da_tela():
 if EMPRESA_PASTA_FORCADA.strip():
     EMPRESA_PASTA = normalizar_nome_empresa(EMPRESA_PASTA_FORCADA)
 else:
-    EMPRESA_PASTA = normalizar_nome_empresa(detectar_nome_empresa_da_tela())
+    EMPRESA_PASTA = "EMPRESA_DESCONHECIDA"
 
-print(f"Pasta da empresa: {EMPRESA_PASTA}")
+
+def atualizar_empresa_pasta():
+    global EMPRESA_PASTA
+    if EMPRESA_PASTA_FORCADA.strip():
+        EMPRESA_PASTA = normalizar_nome_empresa(EMPRESA_PASTA_FORCADA)
+    else:
+        detectado = normalizar_nome_empresa(detectar_nome_empresa_da_tela())
+        if detectado:
+            EMPRESA_PASTA = detectado
+    print(f"Pasta da empresa: {EMPRESA_PASTA}")
 
 # =====================
 # LOG (1 por empresa) + IDP
@@ -1710,6 +1723,8 @@ def main():
 
     inicializar_chrome()
     preencher_login_prefeitura_se_habilitado()
+    aguardar_login_manual_se_necessario()
+    atualizar_empresa_pasta()
     # Carrega cache de chaves OK do log (idempotência)
     chaves_ok = carregar_chaves_ok(log_path_empresa())
     print(f"Chaves OK carregadas do log: {len(chaves_ok)}")
@@ -1838,38 +1853,52 @@ def main():
     sleep(2)
 
 
-try:
-    main()
-except RuntimeError as e:
-    msg = str(e)
-    print(msg)
-
-    # Erros controlados (não são "forenses")
+def map_runtime_error_to_exit_code(msg: str):
     if MSG_CAPTCHA_TIMEOUT in msg:
-        sys.exit(EXIT_CODE_CAPTCHA_TIMEOUT)
+        return EXIT_CODE_CAPTCHA_TIMEOUT
     if MSG_CAPTCHA_INCORRETO in msg:
-        sys.exit(EXIT_CODE_CAPTCHA_TIMEOUT)
+        return EXIT_CODE_CAPTCHA_TIMEOUT
     if MSG_SEM_COMPETENCIA in msg:
-        sys.exit(EXIT_CODE_SEM_COMPETENCIA)
+        return EXIT_CODE_SEM_COMPETENCIA
     if MSG_SEM_SERVICOS in msg:
-        sys.exit(EXIT_CODE_SEM_SERVICOS)
+        return EXIT_CODE_SEM_SERVICOS
     if MSG_CREDENCIAL_INVALIDA in msg:
-        sys.exit(EXIT_CODE_CREDENCIAL_INVALIDA)
+        return EXIT_CODE_CREDENCIAL_INVALIDA
+    if MSG_EMPRESA_MULTIPLA in msg:
+        return EXIT_CODE_EMPRESA_MULTIPLA
     if MSG_TOMADOS_FALHA in msg:
-        sys.exit(EXIT_CODE_TOMADOS_FALHA)
+        return EXIT_CODE_TOMADOS_FALHA
     if MSG_CHROME_INIT_FALHA in msg:
-        sys.exit(EXIT_CODE_CHROME_INIT_FALHA)
+        return EXIT_CODE_CHROME_INIT_FALHA
+    return None
 
-    # Inesperado -> kit forense + re-raise
-    salvar_kit_forense("RuntimeError inesperado", e)
-    raise
-except Exception as e:
-    # Qualquer exceção não mapeada -> kit forense
-    print(f"Erro inesperado: {type(e).__name__}: {e}")
-    salvar_kit_forense("Exceção não tratada", e)
-    raise
-finally:
-    if driver is not None:
-        driver.quit()
-    if TEMP_PROFILE_DIR:
-        shutil.rmtree(TEMP_PROFILE_DIR, ignore_errors=True)
+
+def run_cli():
+    try:
+        main()
+    except RuntimeError as e:
+        msg = str(e)
+        print(msg)
+
+        code = map_runtime_error_to_exit_code(msg)
+        if code is not None:
+            sys.exit(code)
+
+        # Inesperado -> kit forense + re-raise
+        salvar_kit_forense("RuntimeError inesperado", e)
+        raise
+    except Exception as e:
+        # Qualquer exceção não mapeada -> kit forense
+        print(f"Erro inesperado: {type(e).__name__}: {e}")
+        salvar_kit_forense("Exceção não tratada", e)
+        raise
+    finally:
+        if driver is not None:
+            driver.quit()
+        if TEMP_PROFILE_DIR:
+            shutil.rmtree(TEMP_PROFILE_DIR, ignore_errors=True)
+
+
+if __name__ == "__main__":
+    run_cli()
+
