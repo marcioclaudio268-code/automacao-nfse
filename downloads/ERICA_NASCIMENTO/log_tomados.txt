@@ -1,3 +1,0 @@
-# Log Serviços Tomados (uma linha por evento)
-[2026-03-02 11:47:01] STATUS=INICIO | REFERENCIA=02/2026 | MSG=Iniciando etapa Serviços Tomados
-[2026-03-02 11:47:04] STATUS=ERRO | REFERENCIA=02/2026 | MSG=Message: invalid session id: session deleted as the browser has closed the connection from disconnected: not connected to DevTools   (Session info: chrome=145.0.7632.117); For documentation on this er

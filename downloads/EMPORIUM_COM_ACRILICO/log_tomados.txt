@@ -1,3 +1,0 @@
-# Log Serviços Tomados (uma linha por evento)
-[2026-03-02 11:46:10] STATUS=INICIO | REFERENCIA=02/2026 | MSG=Iniciando etapa Serviços Tomados
-[2026-03-02 11:46:31] STATUS=OK | REFERENCIA=02/2026 | ARQ=SERVICOS_TOMADOS_02-2026.xml | PASTA=c:\Users\Windows 11\Desktop\NFS XML\automacao-nfse\downloads\EMPORIUM_COM_ACRILICO\02.2026 | MSG=XML de Serviços Tomados baixado e organizado

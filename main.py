@@ -30,18 +30,6 @@ TEMP_DOWNLOAD_DIR = os.path.join(DOWNLOAD_DIR, "_tmp")
 os.makedirs(TEMP_DOWNLOAD_DIR, exist_ok=True)
 
 
-# =====================
-# MODO DE DEPURACAO / ETAPAS (CADEADO + PAUSA MANUAL)
-# =====================
-MODO_APENAS_CADEADO = os.getenv("MODO_APENAS_CADEADO", "0").strip() == "1"
-# Quanto tempo deixar o Chrome aberto para você baixar manualmente os livros (segundos).
-# - Se 0, o script espera você apertar ENTER no terminal para continuar.
-PAUSA_MANUAL_SEGUNDOS = int(os.getenv("PAUSA_MANUAL_SEGUNDOS", "0").strip() or "0")
-# Se 1, mantém o fluxo atual (Prestados XML + Tomados XML) e, ao final, clica no cadeado vermelho
-# em Serviços Tomados e Serviços Prestados (na competência alvo), pausando para você baixar os livros manualmente.
-ACRESCENTAR_CADEADO_E_PAUSA_FINAL = os.getenv("ACRESCENTAR_CADEADO_E_PAUSA_FINAL", "0").strip() == "1"
-
-
 
 def append_txt(path: str, line: str):
     """Append a human-readable line to a .txt log (one event per line)."""
@@ -63,6 +51,10 @@ EMPRESA_PASTA_FORCADA = os.environ.get("EMPRESA_PASTA_FORCADA", "")
 # Competência alvo: por padrão, mês anterior ao mês atual (apuração).
 # Pode sobrescrever com APURACAO_REFERENCIA=MM/AAAA (ex.: 03/2026 -> alvo 02/2026).
 APURACAO_REFERENCIA = os.environ.get("APURACAO_REFERENCIA", "").strip()
+
+# Acrescimo opcional: clicar cadeado vermelho (Tomados/Prestados) e pausar no final (ENTER)
+ACRESCENTAR_CADEADO_E_PAUSA_FINAL = os.environ.get("ACRESCENTAR_CADEADO_E_PAUSA_FINAL", "1").strip() == "1"
+
 
 PARAR_PROCESSAMENTO = False
 ENCONTROU_MES_ALVO = False
@@ -135,98 +127,6 @@ wait = None
 login_wait_seconds = int(os.environ.get("LOGIN_WAIT_SECONDS", "120"))
 
 
-
-def pausa_manual(contexto: str):
-    """Mantém o Chrome aberto para ações manuais (baixar livros) sem encerrar a execução."""
-    if not MODO_APENAS_CADEADO:
-        return
-    msg = f"[MANUAL] {contexto} | Baixe os livros manualmente (Tomados/Prestados)."
-    print(msg)
-    try:
-        # log simples no raiz da empresa
-        append_txt(os.path.join(pasta_empresa(), "log_fechamento_manual.txt"), msg)
-    except Exception:
-        pass
-
-    if PAUSA_MANUAL_SEGUNDOS <= 0:
-        try:
-            input("[MANUAL] Pressione ENTER para continuar...")
-        except Exception:
-            sleep(5)
-    else:
-        print(f"[MANUAL] Aguardando {PAUSA_MANUAL_SEGUNDOS}s para ações manuais...")
-        sleep(PAUSA_MANUAL_SEGUNDOS)
-
-
-def pausa_final_livros_manual(contexto: str = ""):
-    """Pausa final para baixar os livros manualmente. Encerra apenas ao pressionar ENTER."""
-    if not ACRESCENTAR_CADEADO_E_PAUSA_FINAL:
-        return
-    msg = f"[MANUAL-FINAL] {contexto}".strip() if contexto else "[MANUAL-FINAL] Baixe os livros manualmente (Tomados/Prestados)."
-    print(msg)
-    try:
-        append_txt(os.path.join(pasta_empresa(), "log_fechamento_manual.txt"), msg)
-    except Exception:
-        pass
-    try:
-        input("[MANUAL-FINAL] Pressione ENTER para encerrar o main.py...")
-    except Exception:
-        sleep(5)
-
-
-def encontrar_tr_por_referencia_grid(ref_alvo: str, col_ref: str) -> object:
-    """Retorna <tr> cuja célula de Referência (col_ref) seja exatamente ref_alvo."""
-    celulas_ref = driver.find_elements(By.XPATH, f"//td[contains(@id,',{col_ref}_grid')]")
-    for cel in celulas_ref:
-        try:
-            if (cel.text or "").strip() != ref_alvo:
-                continue
-            tr = cel.find_element(By.XPATH, "./ancestor::tr[1]")
-            # valida novamente
-            cel2 = tr.find_element(By.XPATH, f".//td[contains(@id,',{col_ref}_grid')]")
-            if (cel2.text or "").strip() != ref_alvo:
-                continue
-            return tr
-        except Exception:
-            continue
-    return None
-
-
-def clicar_cadeado_na_linha(ref_alvo: str, col_ref: str) -> bool:
-    """Clica no cadeado (fa-lock) da linha da competência alvo. Retorna True se clicou."""
-    tr = encontrar_tr_por_referencia_grid(ref_alvo, col_ref)
-    if not tr:
-        return False
-
-    # Título varia (Fechar Movimento / Fechar movimento). Use translate para case-insensitive.
-    locks = tr.find_elements(
-        By.XPATH,
-        ".//span[contains(@class,'fa-lock') and contains(translate(@title,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'fechar')]"
-    )
-    if not locks:
-        return False
-
-    click_robusto(locks[0])
-
-    # Alguns fluxos disparam alert/confirm
-    try:
-        WebDriverWait(driver, 2).until(EC.alert_is_present())
-        driver.switch_to.alert.accept()
-    except Exception:
-        pass
-
-    # Aguarda a tela reagir (cadeado sumir ou DOM atualizar). Não é crítico — apenas evita cliques em overlay.
-    try:
-        WebDriverWait(driver, 20).until(lambda d: len(
-            (encontrar_tr_por_referencia_grid(ref_alvo, col_ref) or tr).find_elements(
-                By.XPATH,
-                ".//span[contains(@class,'fa-lock') and contains(translate(@title,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'fechar')]"
-            )
-        ) == 0)
-    except Exception:
-        pass
-
-    return True
 def inicializar_chrome():
     global driver, wait
     try:
@@ -1285,7 +1185,6 @@ def abrir_servicos_tomados(timeout=30):
 
 
 def abrir_servicos_prestados(timeout=30):
-    # tile Serviços Prestados
     if driver.find_elements(By.ID, "imgprestiss"):
         el = WebDriverWait(driver, timeout).until(EC.element_to_be_clickable((By.ID, "imgprestiss")))
         click_robusto(el)
@@ -1376,6 +1275,97 @@ def encontrar_botao_laranja_por_referencia(ref_alvo: str, col_ref: str = "7"):
         except Exception:
             continue
     return None
+
+
+def _aceitar_alert_se_existir(timeout=2):
+    try:
+        WebDriverWait(driver, timeout).until(EC.alert_is_present())
+        driver.switch_to.alert.accept()
+        return True
+    except Exception:
+        return False
+
+def _encontrar_tr_por_referencia(ref_alvo: str, col_ref: str):
+    celulas_ref = driver.find_elements(By.XPATH, f"//td[contains(@id,',{col_ref}_grid')]")
+    for cel in celulas_ref:
+        try:
+            if (cel.text or "").strip() != ref_alvo:
+                continue
+            tr = cel.find_element(By.XPATH, "./ancestor::tr[1]")
+            # valida novamente referência na mesma linha
+            try:
+                cel_ref_linha = tr.find_element(By.XPATH, f".//td[contains(@id,',{col_ref}_grid')]")
+                if (cel_ref_linha.text or "").strip() != ref_alvo:
+                    continue
+            except Exception:
+                continue
+            return tr
+        except Exception:
+            continue
+    return None
+
+def clicar_cadeado_declaracao_fiscal(modulo: str, ano_alvo: int, mes_alvo: int):
+    """Clica no cadeado vermelho da competência alvo no módulo informado (tomados|prestados).
+    Não altera o fluxo principal: se não encontrar referência/cadeado, apenas registra no log.
+    """
+    ref_alvo = f"{mes_alvo:02d}/{ano_alvo}"
+    log_path = os.path.join(DOWNLOAD_DIR, EMPRESA_PASTA, "log_fechamento_manual.txt")
+
+    append_txt(log_path, f"{modulo.upper()} | {ref_alvo} | INICIO | Abrindo Declaração Fiscal -> Serviços {modulo}")
+
+    clicar_inicio_para_dashboard(timeout=40)
+    abrir_declaracao_fiscal(timeout=40)
+    if modulo.lower() == "tomados":
+        abrir_servicos_tomados(timeout=40)
+    else:
+        abrir_servicos_prestados(timeout=40)
+
+    # Aguarda a grid existir
+    WebDriverWait(driver, 50).until(EC.presence_of_element_located((By.ID, "_gridTable")))
+
+    # Se sem registros, nada a fechar
+    try:
+        if tomados_grid_sem_registros(timeout=20):
+            append_txt(log_path, f"{modulo.upper()} | {ref_alvo} | SEM_MOVIMENTO | Nenhum registro para apresentação")
+            return
+    except Exception:
+        # se falhar a detecção, seguimos tentando achar a referência
+        pass
+
+    col_ref = esperar_grid_declaracao_fiscal(timeout=50)
+    tr = _encontrar_tr_por_referencia(ref_alvo, col_ref=col_ref)
+    if not tr:
+        append_txt(log_path, f"{modulo.upper()} | {ref_alvo} | SEM_MOVIMENTO | Referência não encontrada")
+        return
+
+        locks = tr.find_elements(By.XPATH, ".//span[contains(@class,'fa-lock') and contains(@title,'Fechar')]")
+    if locks:
+        try:
+            click_robusto(locks[0])
+            sleep(0.6)
+            _aceitar_alert_se_existir(timeout=2)
+            sleep(1.0)
+            append_txt(log_path, f"{modulo.upper()} | {ref_alvo} | OK | Cadeado clicado")
+        except Exception as e:
+            append_txt(log_path, f"{modulo.upper()} | {ref_alvo} | ERRO | Falha ao clicar cadeado: {type(e).__name__}: {str(e)[:180]}")
+            # não propaga; seguimos para tentar abrir o modal do livro
+    else:
+        append_txt(log_path, f"{modulo.upper()} | {ref_alvo} | SEM_CADEADO | Cadeado não disponível (provável já fechado)")
+
+    # Próximo passo: abrir o modal do LIVRO para seleção manual (mesmo sem cadeado)
+    try:
+        abriu = abrir_modal_livro(timeout=30)
+        append_txt(log_path, f"{modulo.upper()} | {ref_alvo} | MODAL_LIVRO={'OK' if abriu else 'NAO_ABRIU'} | Modal do livro {'aberto' if abriu else 'não abriu'}")
+    except Exception as e:
+        append_txt(log_path, f"{modulo.upper()} | {ref_alvo} | MODAL_LIVRO_ERRO | {type(e).__name__}: {str(e)[:180]}")
+    return
+
+
+def pausa_final_enter():
+    print("\n=== PAUSA MANUAL (LIVROS) ===")
+    print("Cadeados processados. Agora você pode baixar os LIVROS manualmente (Tomados/Prestados).\n")
+    input("Quando terminar, pressione ENTER para encerrar esta empresa... ")
+
 
 def salvar_xml_tomados(xml_tmp_path: str, ano_alvo: int, mes_alvo: int) -> str:
     competencia_dir = os.path.join(DOWNLOAD_DIR, EMPRESA_PASTA, f"{mes_alvo:02d}.{ano_alvo}")
@@ -1531,65 +1521,6 @@ def executar_etapa_servicos_tomados(ano_alvo: int, mes_alvo: int) -> str:
             raise RuntimeError(f"{MSG_TOMADOS_FALHA}: {msg}")
         return "ERRO"
 
-
-def executar_cadeado_tomados(ano_alvo: int, mes_alvo: int) -> str:
-    """Somente clica no cadeado vermelho do período em Serviços Tomados e pausa para ação manual."""
-    ref_alvo = f"{mes_alvo:02d}/{ano_alvo}"
-    try:
-        clicar_inicio_para_dashboard(timeout=40)
-        abrir_declaracao_fiscal(timeout=40)
-        abrir_servicos_tomados(timeout=40)
-        WebDriverWait(driver, 50).until(EC.presence_of_element_located((By.XPATH, "//*[contains(@id,'gridTable')]")))
-
-        # Se não houver linhas, não há o que fechar
-        if tomados_grid_sem_registros(timeout=25):
-            append_txt(os.path.join(pasta_empresa(), "log_fechamento_manual.txt"), f"TOMADOS | {ref_alvo} | SEM_MOVIMENTO (sem linhas)")
-            return "SEM_MOVIMENTO"
-
-        col_ref = esperar_grid_declaracao_fiscal(timeout=50)
-        tr = encontrar_tr_por_referencia_grid(ref_alvo, col_ref)
-        if not tr:
-            append_txt(os.path.join(pasta_empresa(), "log_fechamento_manual.txt"), f"TOMADOS | {ref_alvo} | SEM_MOVIMENTO (referência não encontrada)")
-            return "SEM_MOVIMENTO"
-
-        clicou = clicar_cadeado_na_linha(ref_alvo, col_ref)
-        append_txt(os.path.join(pasta_empresa(), "log_fechamento_manual.txt"), f"TOMADOS | {ref_alvo} | CADEADO={'OK' if clicou else 'NAO_EXISTE'}")
-        pausa_manual(f"TOMADOS {ref_alvo}")
-        return "OK"
-    except Exception as e:
-        append_txt(os.path.join(pasta_empresa(), "log_fechamento_manual.txt"), f"TOMADOS | {ref_alvo} | ERRO_CADEADO | {str(e)[:180]}")
-        pausa_manual(f"TOMADOS {ref_alvo} (erro no cadeado)")
-        return "ERRO"
-
-
-def executar_cadeado_prestados(ano_alvo: int, mes_alvo: int) -> str:
-    """Somente clica no cadeado vermelho do período em Serviços Prestados e pausa para ação manual."""
-    ref_alvo = f"{mes_alvo:02d}/{ano_alvo}"
-    try:
-        clicar_inicio_para_dashboard(timeout=40)
-        abrir_declaracao_fiscal(timeout=40)
-        abrir_servicos_prestados(timeout=40)
-        WebDriverWait(driver, 50).until(EC.presence_of_element_located((By.XPATH, "//*[contains(@id,'gridTable')]")))
-
-        # Reusa detector (funciona igual na prática, mas é tolerante)
-        if tomados_grid_sem_registros(timeout=25):
-            append_txt(os.path.join(pasta_empresa(), "log_fechamento_manual.txt"), f"PRESTADOS | {ref_alvo} | SEM_MOVIMENTO (sem linhas)")
-            return "SEM_MOVIMENTO"
-
-        col_ref = esperar_grid_declaracao_fiscal(timeout=50)
-        tr = encontrar_tr_por_referencia_grid(ref_alvo, col_ref)
-        if not tr:
-            append_txt(os.path.join(pasta_empresa(), "log_fechamento_manual.txt"), f"PRESTADOS | {ref_alvo} | SEM_MOVIMENTO (referência não encontrada)")
-            return "SEM_MOVIMENTO"
-
-        clicou = clicar_cadeado_na_linha(ref_alvo, col_ref)
-        append_txt(os.path.join(pasta_empresa(), "log_fechamento_manual.txt"), f"PRESTADOS | {ref_alvo} | CADEADO={'OK' if clicou else 'NAO_EXISTE'}")
-        pausa_manual(f"PRESTADOS {ref_alvo}")
-        return "OK"
-    except Exception as e:
-        append_txt(os.path.join(pasta_empresa(), "log_fechamento_manual.txt"), f"PRESTADOS | {ref_alvo} | ERRO_CADEADO | {str(e)[:180]}")
-        pausa_manual(f"PRESTADOS {ref_alvo} (erro no cadeado)")
-        return "ERRO"
 def processar_nota_por_indice(i, ano_alvo, mes_alvo):
     global PARAR_PROCESSAMENTO, ENCONTROU_MES_ALVO, CONT_FORA_APOS_ALVO, CONT_FORA_ANTES_ALVO, SEM_COMPETENCIA_NA_EMPRESA
 
@@ -1787,17 +1718,6 @@ def main():
 
     ano_alvo, mes_alvo = calcular_mes_alvo(APURACAO_REFERENCIA)
 
-    # =====================
-    # MODO APENAS CADEADO (FECHAMENTO) + PAUSA MANUAL
-    # =====================
-    if MODO_APENAS_CADEADO:
-        print("MODO_APENAS_CADEADO=1 -> Somente fechar período (cadeado) e pausar para baixar livros manualmente.")
-        executar_cadeado_tomados(ano_alvo, mes_alvo)
-        executar_cadeado_prestados(ano_alvo, mes_alvo)
-        print("MODO_APENAS_CADEADO finalizado. Encerrando execução.")
-        return
-
-
     sem_competencia_inicial = False
 
     try:
@@ -1894,28 +1814,23 @@ def main():
     # Etapa 2: Serviços Tomados (Declaração Fiscal)
     executar_etapa_servicos_tomados(ano_alvo, mes_alvo)
 
-    # =====================
-    # ACRESCENTO: CADEADO (Tomados + Prestados) + PAUSA FINAL (manual para baixar livros)
-    # =====================
+    # Acrescimo opcional (não altera fluxo padrão): clicar cadeado vermelho em Tomados/Prestados e pausar (ENTER)
     if ACRESCENTAR_CADEADO_E_PAUSA_FINAL:
-        print("ACRESCENTAR_CADEADO_E_PAUSA_FINAL=1 -> clicando cadeado vermelho em Tomados e Prestados (competência alvo) e pausando ao final.")
         try:
-            executar_cadeado_tomados(ano_alvo, mes_alvo)
+            clicar_cadeado_declaracao_fiscal("tomados", ano_alvo, mes_alvo)
         except Exception as e:
-            try:
-                append_txt(os.path.join(pasta_empresa(), "log_fechamento_manual.txt"), f"TOMADOS | ERRO_CADEADO | {str(e)[:180]}")
-            except Exception:
-                pass
+            print(f"[CADEADO] Aviso Tomados: {e}")
         try:
-            executar_cadeado_prestados(ano_alvo, mes_alvo)
+            clicar_cadeado_declaracao_fiscal("prestados", ano_alvo, mes_alvo)
         except Exception as e:
-            try:
-                append_txt(os.path.join(pasta_empresa(), "log_fechamento_manual.txt"), f"PRESTADOS | ERRO_CADEADO | {str(e)[:180]}")
-            except Exception:
-                pass
+            print(f"[CADEADO] Aviso Prestados: {e}")
 
-        # Pausa única no final para você baixar os livros manualmente
-        pausa_final_livros_manual(f"Competência alvo: {mes_alvo:02d}/{ano_alvo}")
+        # Pausa manual para baixar livros (encerra apenas com ENTER)
+        try:
+            pausa_final_enter()
+        except Exception:
+            pass
+
     if SEM_COMPETENCIA_NA_EMPRESA:
         raise RuntimeError(MSG_SEM_COMPETENCIA)
 

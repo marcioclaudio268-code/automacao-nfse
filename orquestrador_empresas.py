@@ -60,6 +60,26 @@ def mapear_colunas(headers_normalizados):
     return col_codigo, col_razao, col_cnpj, col_segmento, col_senha
 
 
+def normalizar_codigo_empresa(codigo: str) -> str:
+    """Normaliza o código da empresa para uso em nome de pasta.
+    - Remove espaços
+    - Corrige o caso comum do Excel: 833.0 -> 833
+    """
+    c = (codigo or "").strip()
+    if re.fullmatch(r"\d+\.0", c):
+        c = c.split(".")[0]
+    return c
+
+
+def montar_pasta_empresa_padrao(empresa: dict) -> str:
+    """Padrão do escritório: <CODIGO> <RAZAO_SOCIAL> (o main.py sanitiza para filesystem)."""
+    codigo = normalizar_codigo_empresa(str(empresa.get("codigo", "") or ""))
+    razao = (empresa.get("razao_social") or "").strip()
+    if codigo and razao:
+        return f"{codigo} {razao}".strip()
+    return razao or codigo or "EMPRESA_DESCONHECIDA"
+
+
 def carregar_empresas_csv(path_csv: str):
     empresas = []
     with open(path_csv, "r", encoding="utf-8-sig", newline="") as f:
@@ -248,7 +268,7 @@ def executar_empresa(empresa: dict):
         env = os.environ.copy()
         env["LOGIN_WAIT_SECONDS"] = str(LOGIN_WAIT_SECONDS)
         env["STRICT_LISTA_INICIAL"] = "1"
-        env["EMPRESA_PASTA_FORCADA"] = empresa["razao_social"]
+        env["EMPRESA_PASTA_FORCADA"] = montar_pasta_empresa_padrao(empresa)
         env["AUTO_LOGIN_PREFEITURA"] = "1"
         env["EMPRESA_CNPJ"] = re.sub(r"\D", "", empresa["cnpj"])
         env["EMPRESA_SENHA"] = empresa["senha_prefeitura"]
