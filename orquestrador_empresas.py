@@ -19,6 +19,9 @@ TIMEOUT_PROCESSO_MAIN = int(os.environ.get("TIMEOUT_PROCESSO_MAIN", "1800"))
 CONTINUAR_DE_ONDE_PAROU = os.environ.get("CONTINUAR_DE_ONDE_PAROU", "1").strip() == "1"
 USAR_CHECKPOINT = os.environ.get("USAR_CHECKPOINT", "1").strip() == "1"
 MSG_CAPTCHA_TIMEOUT = "CAPTCHA_NAO_RESOLVIDO_NO_TEMPO"
+MSG_SEM_COMPETENCIA = "SUCESSO_SEM_COMPETENCIA"
+MSG_SEM_SERVICOS = "SUCESSO_SEM_SERVICOS"
+MSG_CREDENCIAL_INVALIDA = "CREDENCIAL_INVALIDA"
 EXIT_CODE_CAPTCHA_TIMEOUT = 30
 EXIT_CODE_SEM_COMPETENCIA = 40
 EXIT_CODE_SEM_SERVICOS = 41
@@ -28,6 +31,7 @@ EXIT_CODE_TOMADOS_FALHA = 42
 EXIT_CODE_CHROME_INIT_FALHA = 60
 MSG_ALERTA_TOMADOS = "ALERTA_TOMADOS_FECHADO"
 MSG_ALERTA_PRESTADOS = "ALERTA_PRESTADOS_FECHADO"
+MSG_NAO_FOI_POSSIVEL_ABRIR_LISTA = "NAO_FOI_POSSIVEL_ABRIR_LISTA_NOTAS"
 STATUS_SUCESSO = {"SUCESSO", "SUCESSO_SEM_COMPETENCIA", "SUCESSO_SEM_SERVICOS"}
 
 
@@ -277,6 +281,8 @@ def executar_empresa(empresa: dict):
         env["EMPRESA_CNPJ"] = re.sub(r"\D", "", empresa["cnpj"])
         env["EMPRESA_SENHA"] = empresa["senha_prefeitura"]
         env["FORCAR_SESSAO_LIMPA_LOGIN"] = os.environ.get("FORCAR_SESSAO_LIMPA_LOGIN", "1")
+        # Orquestrador é não-interativo; evita pausa manual no final da empresa.
+        env["ACRESCENTAR_CADEADO_E_PAUSA_FINAL"] = os.environ.get("ACRESCENTAR_CADEADO_E_PAUSA_FINAL", "0")
 
         try:
             proc = subprocess.run(
@@ -293,6 +299,23 @@ def executar_empresa(empresa: dict):
             continue
 
         rc = int(proc.returncode)
+        saida = "\n".join([(proc.stdout or ""), (proc.stderr or "")])
+
+        # fallback: se o main retornou 1 por exceção inesperada, tenta remapear por marcador textual.
+        if rc == 1:
+            if MSG_CAPTCHA_TIMEOUT in saida or MSG_CAPTCHA_TIMEOUT in (proc.stderr or ""):
+                rc = EXIT_CODE_CAPTCHA_TIMEOUT
+            elif MSG_CAPTCHA_TIMEOUT in (proc.stdout or ""):
+                rc = EXIT_CODE_CAPTCHA_TIMEOUT
+            elif MSG_CREDENCIAL_INVALIDA in saida:
+                rc = EXIT_CODE_CREDENCIAL_INVALIDA
+            elif MSG_SEM_COMPETENCIA in saida:
+                rc = EXIT_CODE_SEM_COMPETENCIA
+            elif MSG_SEM_SERVICOS in saida:
+                rc = EXIT_CODE_SEM_SERVICOS
+            elif MSG_NAO_FOI_POSSIVEL_ABRIR_LISTA in saida:
+                # Falha transitória comum após login/captcha.
+                rc = EXIT_CODE_CAPTCHA_TIMEOUT
         sucesso_por_codigo = {
             0: ("SUCESSO", "OK"),
             EXIT_CODE_SEM_COMPETENCIA: ("SUCESSO_SEM_COMPETENCIA", "Sem notas na competencia alvo"),
@@ -303,7 +326,6 @@ def executar_empresa(empresa: dict):
 
         if rc in sucesso_por_codigo:
             status, motivo = sucesso_por_codigo[rc]
-            saida = "\n".join([(proc.stdout or ""), (proc.stderr or "")])
             alertas = []
             if MSG_ALERTA_TOMADOS in saida:
                 alertas.append("tomados")
@@ -331,6 +353,9 @@ def executar_empresa(empresa: dict):
             break
         else:
             ultimo_motivo = f"Falha execucao (exit={rc})"
+            if saida.strip():
+                resumo = " | ".join([ln.strip() for ln in saida.splitlines() if ln.strip()][-3:])
+                ultimo_motivo = f"{ultimo_motivo}: {resumo[:220]}"
 
         print(f"Falha tentativa {tentativa}: {ultimo_motivo}")
 
