@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<NFSe xmlns="http://www.sped.fazenda.gov.br/nfse" versao="1.00">
+<infNFSe Id="NFS35060031234443623000150000000000049326020517295573">
+<xLocEmi>BAURU</xLocEmi>
+<xLocPrestacao>Bauru</xLocPrestacao>
+<nNFSe>493</nNFSe>
+<cLocIncid>3506003</cLocIncid>
+<xLocIncid>Bauru</xLocIncid>
+<xTribNac>Advocacia</xTribNac>
+<verAplic>SilTecnologia_v1.00</verAplic>
+<ambGer>1</ambGer>
+<tpEmis>2</tpEmis>
+<cStat>100</cStat>
+<dhProc>2026-02-04T00:00:00-03:00</dhProc>
+<nDFSe>51729557</nDFSe>
+<emit>
+<CNPJ>34443623000150</CNPJ>
+<IM>588069</IM>
+<xNome>CAIO LORENZO ACIALDI SOCIEDADE INDIVIDUAL DE ADVOCACIA</xNome>
+<enderNac>
+<xLgr>RUA ENG. ALPHEU JOSE RIBAS SAMPAIO</xLgr>
+<nro>1-80</nro>
+<xBairro>JD. HENRIQUE</xBairro>
+<cMun>3506003</cMun>
+<UF>SP</UF>
+<CEP>17012631</CEP>
+</enderNac>
+<fone>1432358900</fone>
+<email>caio@caioacialdi.com.br</email>
+</emit>
+<valores>
+<vBC>2000.00</vBC>
+<pAliqAplic>2.42</pAliqAplic>
+<vISSQN>48.40</vISSQN>
+<vTotalRet>48.40</vTotalRet>
+<vLiq>1951.60</vLiq>
+</valores>
+<DPS versao="1.00">
+<infDPS Id="DPS350600323444362300015008001000000000000493">
+<tpAmb>1</tpAmb>
+<dhEmi>2026-02-04T00:00:00-03:00</dhEmi>
+<verAplic>SilTecnologia_v1.00</verAplic>
+<serie>08001</serie>
+<nDPS>493</nDPS>
+<dCompet>2026-02-01</dCompet>
+<tpEmit>1</tpEmit>
+<cLocEmi>3506003</cLocEmi>
+<prest>
+<CNPJ>34443623000150</CNPJ>
+<IM>588069</IM>
+<fone>1432358900</fone>
+<email>caio@caioacialdi.com.br</email>
+<regTrib>
+<opSimpNac>3</opSimpNac>
+<regApTribSN>1</regApTribSN>
+<regEspTrib>0</regEspTrib>
+</regTrib>
+</prest>
+<toma>
+<CNPJ>22345948000111</CNPJ>
+<xNome>MONCLAIR MEIAS E CONFECCOES LTDA</xNome>
+<end>
+<endNac>
+<cMun>3506003</cMun>
+<CEP>17012205</CEP>
+</endNac>
+<xLgr>RUA HENRIQUE SAVI</xLgr>
+<nro>1555</nro>
+<xCpl>LOJA: AM11;</xCpl>
+<xBairro>VILA NOVA CIDADE UNIVERSITARIA</xBairro>
+</end>
+</toma>
+<serv>
+<locPrest>
+<cLocPrestacao>3506003</cLocPrestacao>
+</locPrest>
+<cServ>
+<cTribNac>171401</cTribNac>
+<xDescServ>SERVICOS JURIDICOS PRESTADOS|</xDescServ>
+<cNBS>113019000</cNBS>
+</cServ>
+<infoCompl>
+<xInfComp>Ref. Jan/2026 - Vencto. 10/02/2026|</xInfComp>
+</infoCompl>
+</serv>
+<valores>
+<vServPrest>
+<vServ>2000.00</vServ>
+</vServPrest>
+<trib>
+<tribMun>
+<tribISSQN>1</tribISSQN>
+<tpRetISSQN>2</tpRetISSQN>
+</tribMun>
+<tribFed/>
+<totTrib>
+<vTotTrib>
+<vTotTribFed>0.00</vTotTribFed>
+<vTotTribEst>0.00</vTotTribEst>
+<vTotTribMun>48.40</vTotTribMun>
+</vTotTrib>
+</totTrib>
+</trib>
+</valores>
+</infDPS>
+</DPS>
+</infNFSe>
+</NFSe>
+

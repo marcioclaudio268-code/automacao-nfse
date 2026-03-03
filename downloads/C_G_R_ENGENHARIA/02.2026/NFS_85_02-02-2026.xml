@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<NFSe xmlns="http://www.sped.fazenda.gov.br/nfse" versao="1.00">
+<infNFSe Id="NFS35060031241677370000145000000000008526020516644690">
+<xLocEmi>BAURU</xLocEmi>
+<xLocPrestacao>Bauru</xLocPrestacao>
+<nNFSe>85</nNFSe>
+<cLocIncid>3506003</cLocIncid>
+<xLocIncid>Bauru</xLocIncid>
+<xTribNac>Engenharia e congêneres.</xTribNac>
+<verAplic>SilTecnologia_v1.00</verAplic>
+<ambGer>1</ambGer>
+<tpEmis>2</tpEmis>
+<cStat>100</cStat>
+<dhProc>2026-02-02T00:00:00-03:00</dhProc>
+<nDFSe>51664469</nDFSe>
+<emit>
+<CNPJ>41677370000145</CNPJ>
+<IM>607180</IM>
+<xNome>C A G R ENGENHARIA LTDA</xNome>
+<enderNac>
+<xLgr>17014-400 - RUA AZARIAS LEITE, 13-86  SALA F</xLgr>
+<nro>0</nro>
+<xBairro>VILA MESQUITA</xBairro>
+<cMun>3506003</cMun>
+<UF>SP</UF>
+<CEP>17014400</CEP>
+</enderNac>
+<fone>1432332030</fone>
+<email>contratos@jrassessoria.com.br</email>
+</emit>
+<valores>
+<vBC>16000.00</vBC>
+<pAliqAplic>2.00</pAliqAplic>
+<vISSQN>320.00</vISSQN>
+<vLiq>16000.00</vLiq>
+</valores>
+<DPS versao="1.00">
+<infDPS Id="DPS350600324167737000014549999000000000000085">
+<tpAmb>1</tpAmb>
+<dhEmi>2026-02-02T00:00:00-03:00</dhEmi>
+<verAplic>SilTecnologia_v1.00</verAplic>
+<serie>49999</serie>
+<nDPS>85</nDPS>
+<dCompet>2026-02-01</dCompet>
+<tpEmit>1</tpEmit>
+<cLocEmi>3506003</cLocEmi>
+<prest>
+<CNPJ>41677370000145</CNPJ>
+<IM>607180</IM>
+<fone>1432332030</fone>
+<email>contratos@jrassessoria.com.br</email>
+<regTrib>
+<opSimpNac>3</opSimpNac>
+<regApTribSN/>
+<regEspTrib>0</regEspTrib>
+</regTrib>
+</prest>
+<toma>
+<CNPJ>57748204000122</CNPJ>
+<xNome>PROGEN S.A.</xNome>
+<end>
+<endNac>
+<cMun>3550308</cMun>
+<CEP>01219902</CEP>
+</endNac>
+<xLgr>Largo do Arouche</xLgr>
+<nro>24</nro>
+<xBairro>República</xBairro>
+</end>
+</toma>
+<serv>
+<locPrest>
+<cLocPrestacao>3506003</cLocPrestacao>
+</locPrest>
+<cServ>
+<cTribNac>070101</cTribNac>
+<xDescServ>PRESTAÇÃO DE SERVIÇO DE ENGENHARIA
+Nº DO PEDIDO DE COMPRA: 4500006002</xDescServ>
+<cNBS>114031000</cNBS>
+</cServ>
+</serv>
+<valores>
+<vServPrest>
+<vServ>16000.00</vServ>
+</vServPrest>
+<trib>
+<tribMun>
+<tribISSQN>1</tribISSQN>
+<tpRetISSQN>1</tpRetISSQN>
+</tribMun>
+<tribFed/>
+<totTrib>
+<vTotTrib>
+<vTotTribFed>0.00</vTotTribFed>
+<vTotTribEst>0.00</vTotTribEst>
+<vTotTribMun>320.00</vTotTribMun>
+</vTotTrib>
+</totTrib>
+</trib>
+</valores>
+</infDPS>
+</DPS>
+</infNFSe>
+</NFSe>
+

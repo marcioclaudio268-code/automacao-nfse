@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<NFSe xmlns="http://www.sped.fazenda.gov.br/nfse" versao="1.00">
+<infNFSe Id="NFS35060031241570055000114000000000006726020520160362">
+<xLocEmi>BAURU</xLocEmi>
+<xLocPrestacao>Bauru</xLocPrestacao>
+<nNFSe>67</nNFSe>
+<cLocIncid>3506003</cLocIncid>
+<xLocIncid>Bauru</xLocIncid>
+<xTribNac>Representação de qualquer natureza, inclusive comercial.</xTribNac>
+<verAplic>SilTecnologia_v1.00</verAplic>
+<ambGer>1</ambGer>
+<tpEmis>2</tpEmis>
+<cStat>100</cStat>
+<dhProc>2026-02-10T00:00:00-03:00</dhProc>
+<nDFSe>52016036</nDFSe>
+<emit>
+<CNPJ>41570055000114</CNPJ>
+<IM>606853</IM>
+<xNome>A B S REPRESENTACOES LTDA</xNome>
+<enderNac>
+<xLgr>17054-040 - RUA ALASKA, 20-06</xLgr>
+<nro>0</nro>
+<xBairro>JD. TERRA BRANCA</xBairro>
+<cMun>3506003</cMun>
+<UF>SP</UF>
+<CEP>17054040</CEP>
+</enderNac>
+<fone>1432332030</fone>
+<email>contratos@jrassessoria.com.br</email>
+</emit>
+<valores>
+<vBC>31662.34</vBC>
+<pAliqAplic>2.82</pAliqAplic>
+<vISSQN>892.88</vISSQN>
+<vLiq>31662.34</vLiq>
+</valores>
+<DPS versao="1.00">
+<infDPS Id="DPS350600324157005500011449999000000000000067">
+<tpAmb>1</tpAmb>
+<dhEmi>2026-02-10T00:00:00-03:00</dhEmi>
+<verAplic>SilTecnologia_v1.00</verAplic>
+<serie>49999</serie>
+<nDPS>67</nDPS>
+<dCompet>2026-02-01</dCompet>
+<tpEmit>1</tpEmit>
+<cLocEmi>3506003</cLocEmi>
+<prest>
+<CNPJ>41570055000114</CNPJ>
+<IM>606853</IM>
+<fone>1432332030</fone>
+<email>contratos@jrassessoria.com.br</email>
+<regTrib>
+<opSimpNac>3</opSimpNac>
+<regApTribSN/>
+<regEspTrib>0</regEspTrib>
+</regTrib>
+</prest>
+<toma>
+<CNPJ>02056701000178</CNPJ>
+<xNome>SKYLACK TINTAS E VERNIZES LTDA</xNome>
+<end>
+<endNac>
+<cMun>3545209</cMun>
+<CEP>13324180</CEP>
+</endNac>
+<xLgr>ESTRADA DO JURUMIRIM,</xLgr>
+<nro>570</nro>
+<xBairro>Canjica</xBairro>
+</end>
+</toma>
+<serv>
+<locPrest>
+<cLocPrestacao>3506003</cLocPrestacao>
+</locPrest>
+<cServ>
+<cTribNac>100901</cTribNac>
+<xDescServ>REPRESENTAÇÃO COMERCIAL
+COMISSÃO MÊS JANEIRO/2026</xDescServ>
+<cNBS>102010000</cNBS>
+</cServ>
+</serv>
+<valores>
+<vServPrest>
+<vServ>31662.34</vServ>
+</vServPrest>
+<trib>
+<tribMun>
+<tribISSQN>1</tribISSQN>
+<tpRetISSQN>1</tpRetISSQN>
+</tribMun>
+<tribFed/>
+<totTrib>
+<vTotTrib>
+<vTotTribFed>0.00</vTotTribFed>
+<vTotTribEst>0.00</vTotTribEst>
+<vTotTribMun>892.88</vTotTribMun>
+</vTotTrib>
+</totTrib>
+</trib>
+</valores>
+</infDPS>
+</DPS>
+</infNFSe>
+</NFSe>
+

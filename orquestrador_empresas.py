@@ -1,21 +1,30 @@
-import csv
+﻿import csv
+import json
 import os
+import re
 import subprocess
+import traceback
 import sys
 import unicodedata
-import re
-import json
 from datetime import datetime
-from time import sleep
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CSV_EMPRESAS = os.environ.get("EMPRESAS_ARQUIVO", os.environ.get("EMPRESAS_CSV", "empresas.xlsx"))
-REPORT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "report_execucao_empresas.csv")
-CHECKPOINT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "checkpoint.json")  # ← NOVO
+REPORT_PATH = os.path.join(BASE_DIR, "report_execucao_empresas.csv")
+CHECKPOINT_PATH = os.path.join(BASE_DIR, "checkpoint_execucao_empresas.json")
 MAX_TENTATIVAS = int(os.environ.get("MAX_TENTATIVAS_EMPRESA", "3"))
 LOGIN_WAIT_SECONDS = int(os.environ.get("LOGIN_WAIT_SECONDS", "120"))
+TIMEOUT_PROCESSO_MAIN = int(os.environ.get("TIMEOUT_PROCESSO_MAIN", "1800"))
+CONTINUAR_DE_ONDE_PAROU = os.environ.get("CONTINUAR_DE_ONDE_PAROU", "1").strip() == "1"
+USAR_CHECKPOINT = os.environ.get("USAR_CHECKPOINT", "1").strip() == "1"
 MSG_CAPTCHA_TIMEOUT = "CAPTCHA_NAO_RESOLVIDO_NO_TEMPO"
 EXIT_CODE_CAPTCHA_TIMEOUT = 30
 EXIT_CODE_SEM_COMPETENCIA = 40
+EXIT_CODE_SEM_SERVICOS = 41
+EXIT_CODE_CREDENCIAL_INVALIDA = 50
+EXIT_CODE_TOMADOS_FALHA = 42
+EXIT_CODE_CHROME_INIT_FALHA = 60
+STATUS_SUCESSO = {"SUCESSO", "SUCESSO_SEM_COMPETENCIA", "SUCESSO_SEM_SERVICOS"}
 
 
 def normalizar_header(h: str) -> str:
@@ -45,7 +54,7 @@ def mapear_colunas(headers_normalizados):
 
     if not all([col_codigo, col_razao, col_cnpj, col_segmento, col_senha]):
         raise ValueError(
-            "Colunas obrigatórias não encontradas. Esperado: Código, Razão Social, CNPJ, Segmento, Senha Prefeitura"
+            "Colunas obrigatÃ³rias nÃ£o encontradas. Esperado: CÃ³digo, RazÃ£o Social, CNPJ, Segmento, Senha Prefeitura"
         )
 
     return col_codigo, col_razao, col_cnpj, col_segmento, col_senha
@@ -74,10 +83,8 @@ def carregar_empresas_csv(path_csv: str):
 
 def encontrar_header_xlsx(ws, max_linhas_busca=25):
     linhas = ws.iter_rows(values_only=True)
-    cache = []
 
     for i, row in enumerate(linhas, start=1):
-        cache.append(row)
         if i > max_linhas_busca:
             break
 
@@ -90,15 +97,16 @@ def encontrar_header_xlsx(ws, max_linhas_busca=25):
             continue
 
     raise ValueError(
-        "Colunas obrigatórias não encontradas nas primeiras linhas do XLSX. "
-        "Esperado: Código, Razão Social, CNPJ, Segmento, Senha Prefeitura"
+        "Colunas obrigatÃ³rias nÃ£o encontradas nas primeiras linhas do XLSX. "
+        "Esperado: CÃ³digo, RazÃ£o Social, CNPJ, Segmento, Senha Prefeitura"
     )
+
 
 def carregar_empresas_xlsx(path_xlsx: str):
     try:
         from openpyxl import load_workbook
     except Exception as e:
-        raise RuntimeError("Para usar .xlsx instale a dependência: pip install openpyxl") from e
+        raise RuntimeError("Para usar .xlsx instale a dependÃªncia: pip install openpyxl") from e
 
     wb = load_workbook(path_xlsx, read_only=True, data_only=True)
     ws = wb.active
@@ -133,101 +141,108 @@ def carregar_empresas(path_arquivo: str):
     return carregar_empresas_csv(path_arquivo)
 
 
-# =====================
-# SISTEMA DE CHECKPOINT
-# =====================
-def carregar_checkpoint():
-    """Carrega checkpoint se existir, retorna None caso contrário"""
-    if not os.path.exists(CHECKPOINT_PATH):
-        return None
-    
+def carregar_report_existente(path_report: str):
+    concluidas = set()
+    if not os.path.exists(path_report):
+        return concluidas
+
     try:
-        with open(CHECKPOINT_PATH, "r", encoding="utf-8") as f:
-            checkpoint = json.load(f)
-            print("\n" + "=" * 80)
-            print("CHECKPOINT ENCONTRADO!")
-            print("=" * 80)
-            print(f"Ultima empresa processada: {checkpoint.get('ultima_empresa_codigo')} - {checkpoint.get('ultima_empresa_razao')}")
-            print(f"Indice: {checkpoint.get('ultimo_indice')} de {checkpoint.get('total_empresas')}")
-            print(f"Data do checkpoint: {checkpoint.get('timestamp')}")
-            print(f"Empresas restantes: {checkpoint.get('total_empresas') - checkpoint.get('ultimo_indice')}")
-            print("=" * 80)
-            return checkpoint
-    except Exception as e:
-        print(f"Erro ao carregar checkpoint (sera ignorado): {e}")
-        return None
+        with open(path_report, "r", encoding="utf-8-sig", newline="") as f:
+            reader = csv.DictReader(f, delimiter=';')
+            for row in reader:
+                status = (row.get("status") or "").strip().upper()
+                cnpj = re.sub(r"\D", "", row.get("cnpj") or "")
+                if status in {"SUCESSO", "SUCESSO_SEM_COMPETENCIA", "SUCESSO_SEM_SERVICOS"} and cnpj:
+                    concluidas.add(cnpj)
+    except Exception:
+        pass
+
+    return concluidas
 
 
-def salvar_checkpoint(indice_atual, empresa, total_empresas):
-    """Salva o estado atual do processamento"""
-    checkpoint = {
-        "ultimo_indice": indice_atual,
-        "ultima_empresa_codigo": empresa.get("codigo", ""),
-        "ultima_empresa_razao": empresa.get("razao_social", ""),
-        "ultima_empresa_cnpj": empresa.get("cnpj", ""),
-        "total_empresas": total_empresas,
+def carregar_rows_report_existente(path_report: str):
+    rows = []
+    if not os.path.exists(path_report):
+        return rows
+
+    try:
+        with open(path_report, "r", encoding="utf-8-sig", newline="") as f:
+            reader = csv.DictReader(f, delimiter=';')
+            for row in reader:
+                ts_inicio_raw = (row.get("timestamp_inicio") or "").strip()
+                ts_fim_raw = (row.get("timestamp_fim") or "").strip()
+                try:
+                    ts_inicio = datetime.strptime(ts_inicio_raw, "%Y-%m-%d %H:%M:%S")
+                except Exception:
+                    ts_inicio = datetime.now()
+                try:
+                    ts_fim = datetime.strptime(ts_fim_raw, "%Y-%m-%d %H:%M:%S")
+                except Exception:
+                    ts_fim = ts_inicio
+
+                tentativas_raw = (row.get("tentativas") or "0").strip()
+                try:
+                    tentativas = int(tentativas_raw or 0)
+                except Exception:
+                    tentativas = 0
+
+                empresa = {
+                    "codigo": (row.get("codigo_empresa") or "").strip(),
+                    "razao_social": (row.get("razao_social") or "").strip(),
+                    "cnpj": (row.get("cnpj") or "").strip(),
+                    "segmento": (row.get("segmento") or "").strip(),
+                }
+                resultado = {
+                    "status": (row.get("status") or "").strip(),
+                    "motivo": (row.get("motivo") or "").strip(),
+                    "tentativas": tentativas,
+                }
+                rows.append({"empresa": empresa, "resultado": resultado, "inicio": ts_inicio, "fim": ts_fim})
+    except Exception:
+        return rows
+
+    return rows
+
+
+def carregar_checkpoint(path_checkpoint: str):
+    if not os.path.exists(path_checkpoint):
+        return {"processadas": set(), "ultimo_indice": -1}
+
+    try:
+        with open(path_checkpoint, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        processadas = set(re.sub(r"\D", "", c) for c in data.get("processadas", []) if c)
+        ultimo_indice = int(data.get("ultimo_indice", -1))
+        return {"processadas": processadas, "ultimo_indice": ultimo_indice}
+    except Exception:
+        return {"processadas": set(), "ultimo_indice": -1}
+
+
+def salvar_checkpoint(path_checkpoint: str, processadas, ultimo_indice: int):
+    payload = {
         "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "ultimo_indice": int(ultimo_indice),
+        "processadas": sorted(set(processadas)),
     }
-    
-    try:
-        with open(CHECKPOINT_PATH, "w", encoding="utf-8") as f:
-            json.dump(checkpoint, f, indent=2, ensure_ascii=False)
-    except Exception as e:
-        print(f"[AVISO] Erro ao salvar checkpoint: {e}")
+    tmp_path = f"{path_checkpoint}.tmp"
+    with open(tmp_path, "w", encoding="utf-8") as f:
+        json.dump(payload, f, ensure_ascii=False, indent=2)
+    os.replace(tmp_path, path_checkpoint)
 
 
-def limpar_checkpoint():
-    """Remove o arquivo de checkpoint ao concluir todas as empresas"""
-    try:
-        if os.path.exists(CHECKPOINT_PATH):
-            os.remove(CHECKPOINT_PATH)
-            print("\nCheckpoint removido (processamento completo).")
-    except Exception as e:
-        print(f"[AVISO] Erro ao remover checkpoint: {e}")
-
-
-def perguntar_retomar_checkpoint():
-    """Pergunta ao usuário se deseja retomar do checkpoint"""
-    print("\nDeseja RETOMAR do checkpoint? (S/N): ", end="", flush=True)
-    
-    # Timeout de 30 segundos para resposta
-    import select
-    
-    if os.name == 'nt':  # Windows
-        import msvcrt
-        inicio = datetime.now()
-        while (datetime.now() - inicio).total_seconds() < 30:
-            if msvcrt.kbhit():
-                resposta = msvcrt.getch().decode('utf-8').strip().upper()
-                print(resposta)
-                return resposta == 'S'
-            sleep(0.1)
-    else:  # Unix/Linux/Mac
-        i, o, e = select.select([sys.stdin], [], [], 30)
-        if i:
-            resposta = sys.stdin.readline().strip().upper()
-            return resposta == 'S'
-    
-    # Se não respondeu em 30s, assume SIM (retomar)
-    print("\n[TIMEOUT] Retomando automaticamente...")
-    return True
-
-
-# =====================
-# EXECUÇÃO POR EMPRESA
-# =====================
 def executar_empresa(empresa: dict):
     inicio = datetime.now()
     ultimo_motivo = ""
+    main_script = os.path.join(BASE_DIR, "main.py")
 
     for tentativa in range(1, MAX_TENTATIVAS + 1):
         print("\n" + "=" * 80)
         print(f"Empresa {empresa['codigo']} - {empresa['razao_social']}")
         print(f"CNPJ: {empresa['cnpj']} | Segmento: {empresa['segmento']}")
-        print(f"Senha prefeitura (referência): {empresa['senha_prefeitura']}")
+        print("Senha prefeitura (referencia): [OCULTA]")
         print(f"Tentativa {tentativa}/{MAX_TENTATIVAS}")
         print(
-            f"Etapa 1: login automático (CNPJ/senha) + captcha humano; após Entrar o robô navega sozinho para Lista Nota Fiscais. Tempo: {LOGIN_WAIT_SECONDS}s."
+            f"Etapa 1: login automatico (CNPJ/senha) + captcha humano; apos Entrar o robo navega sozinho para Lista Nota Fiscais. Tempo: {LOGIN_WAIT_SECONDS}s."
         )
 
         env = os.environ.copy()
@@ -237,35 +252,50 @@ def executar_empresa(empresa: dict):
         env["AUTO_LOGIN_PREFEITURA"] = "1"
         env["EMPRESA_CNPJ"] = re.sub(r"\D", "", empresa["cnpj"])
         env["EMPRESA_SENHA"] = empresa["senha_prefeitura"]
-        env["LIMITE_HEURISTICA_FORA_ALVO"] = "1"
+        env["FORCAR_SESSAO_LIMPA_LOGIN"] = os.environ.get("FORCAR_SESSAO_LIMPA_LOGIN", "1")
 
-        proc = subprocess.run(
-            [sys.executable, "main.py"],
-            env=env,
-        )
+        try:
+            proc = subprocess.run(
+                [sys.executable, main_script],
+                env=env,
+                cwd=BASE_DIR,
+                timeout=TIMEOUT_PROCESSO_MAIN,
+            )
+        except subprocess.TimeoutExpired:
+            ultimo_motivo = f"Timeout de execucao do main.py (> {TIMEOUT_PROCESSO_MAIN}s)"
+            print(f"Falha tentativa {tentativa}: {ultimo_motivo}")
+            continue
 
-        if proc.returncode == 0:
+        rc = int(proc.returncode)
+        sucesso_por_codigo = {
+            0: ("SUCESSO", "OK"),
+            EXIT_CODE_SEM_COMPETENCIA: ("SUCESSO_SEM_COMPETENCIA", "Sem notas na competencia alvo"),
+            EXIT_CODE_SEM_SERVICOS: ("SUCESSO_SEM_SERVICOS", "Contribuinte sem modulo de Nota Fiscal"),
+            EXIT_CODE_CREDENCIAL_INVALIDA: ("SUCESSO", "Revisar manualmente: credencial inválida (usuário/senha) no portal"),
+        }
+
+        if rc in sucesso_por_codigo:
+            status, motivo = sucesso_por_codigo[rc]
             return {
-                "status": "SUCESSO",
-                "motivo": "OK",
+                "status": status,
+                "motivo": motivo,
                 "tentativas": tentativa,
                 "inicio": inicio,
                 "fim": datetime.now(),
             }
 
-        if proc.returncode == EXIT_CODE_SEM_COMPETENCIA:
-            return {
-                "status": "SUCESSO_SEM_COMPETENCIA",
-                "motivo": "Sem notas na competência alvo",
-                "tentativas": tentativa,
-                "inicio": inicio,
-                "fim": datetime.now(),
-            }
-
-        if proc.returncode == EXIT_CODE_CAPTCHA_TIMEOUT:
-            ultimo_motivo = "Captcha não resolvido a tempo"
+        if rc == EXIT_CODE_CAPTCHA_TIMEOUT:
+            ultimo_motivo = "Captcha nao resolvido a tempo"
+        elif rc == EXIT_CODE_TOMADOS_FALHA:
+            ultimo_motivo = "Falha na etapa de Servicos Tomados"
+            print(f"Falha tentativa {tentativa}: {ultimo_motivo}")
+            break
+        elif rc == EXIT_CODE_CHROME_INIT_FALHA:
+            ultimo_motivo = "Falha na inicializacao do Chrome/WebDriver"
+            print(f"Falha tentativa {tentativa}: {ultimo_motivo}")
+            break
         else:
-            ultimo_motivo = f"Falha execução (exit={proc.returncode})"
+            ultimo_motivo = f"Falha execucao (exit={rc})"
 
         print(f"Falha tentativa {tentativa}: {ultimo_motivo}")
 
@@ -277,111 +307,166 @@ def executar_empresa(empresa: dict):
         "fim": datetime.now(),
     }
 
+REPORT_HEADER = [
+    "timestamp_inicio",
+    "timestamp_fim",
+    "codigo_empresa",
+    "razao_social",
+    "cnpj",
+    "segmento",
+    "status",
+    "motivo",
+    "tentativas",
+]
 
-def salvar_report(rows):
-    header = [
-        "timestamp_inicio",
-        "timestamp_fim",
-        "codigo_empresa",
-        "razao_social",
-        "cnpj",
-        "segmento",
-        "status",
-        "motivo",
-        "tentativas",
-    ]
-    with open(REPORT_PATH, "w", newline="", encoding="utf-8-sig") as f:
+
+def garantir_report_com_header(path_report: str):
+    if os.path.exists(path_report):
+        return
+    with open(path_report, "w", newline="", encoding="utf-8-sig") as f:
+        csv.writer(f, delimiter=';').writerow(REPORT_HEADER)
+
+
+def resetar_report(path_report: str):
+    with open(path_report, "w", newline="", encoding="utf-8-sig") as f:
+        csv.writer(f, delimiter=';').writerow(REPORT_HEADER)
+
+
+def append_report_row(path_report: str, row):
+    garantir_report_com_header(path_report)
+    with open(path_report, "a", newline="", encoding="utf-8-sig") as f:
         w = csv.writer(f, delimiter=';')
-        w.writerow(header)
-        for r in rows:
-            w.writerow([
-                r["inicio"].strftime("%Y-%m-%d %H:%M:%S"),
-                r["fim"].strftime("%Y-%m-%d %H:%M:%S"),
-                r["empresa"]["codigo"],
-                r["empresa"]["razao_social"],
-                r["empresa"]["cnpj"],
-                r["empresa"]["segmento"],
-                r["resultado"]["status"],
-                r["resultado"]["motivo"],
-                r["resultado"]["tentativas"],
-            ])
+        w.writerow([
+            row["inicio"].strftime("%Y-%m-%d %H:%M:%S"),
+            row["fim"].strftime("%Y-%m-%d %H:%M:%S"),
+            row["empresa"]["codigo"],
+            row["empresa"]["razao_social"],
+            row["empresa"]["cnpj"],
+            row["empresa"]["segmento"],
+            row["resultado"]["status"],
+            row["resultado"]["motivo"],
+            row["resultado"]["tentativas"],
+        ])
 
 
 def main():
+    if not os.path.exists(CSV_EMPRESAS):
+        print(f"Arquivo de empresas nÃ£o encontrado: {CSV_EMPRESAS}")
+        print("Informe EMPRESAS_ARQUIVO com caminho vÃ¡lido (.xlsx/.csv).")
+        return
+
     empresas = carregar_empresas(CSV_EMPRESAS)
-    total_empresas = len(empresas)
-    print(f"Empresas carregadas: {total_empresas}")
+    print(f"Empresas carregadas: {len(empresas)}")
 
-    # ========================================
-    # VERIFICAR SE EXISTE CHECKPOINT
-    # ========================================
-    checkpoint = carregar_checkpoint()
-    indice_inicial = 0
-    
-    if checkpoint:
-        ultimo_indice = checkpoint.get("ultimo_indice", 0)
-        
-        # Verifica se o checkpoint é válido para a lista atual
-        if ultimo_indice < total_empresas:
-            retomar = perguntar_retomar_checkpoint()
-            
-            if retomar:
-                indice_inicial = ultimo_indice + 1  # Começa na PRÓXIMA empresa
-                print(f"\n[RETOMANDO] Iniciando do indice {indice_inicial} (empresa {indice_inicial + 1}/{total_empresas})")
-            else:
-                print("\n[REINICIANDO] Processamento do ZERO.")
-                limpar_checkpoint()
-        else:
-            print("\n[AVISO] Checkpoint obsoleto (indice maior que total). Iniciando do zero.")
-            limpar_checkpoint()
+    concluidas = set()
+    if CONTINUAR_DE_ONDE_PAROU:
+        concluidas = carregar_report_existente(REPORT_PATH)
+        if concluidas:
+            print(f"Retomada ativa: {len(concluidas)} empresas jÃ¡ concluÃ­das serÃ£o puladas.")
 
-    resultados = []
-    
-    # ========================================
-    # PROCESSAMENTO COM CHECKPOINT
-    # ========================================
-    for idx, empresa in enumerate(empresas):
-        # Pula empresas já processadas (se retomando)
-        if idx < indice_inicial:
-            print(f"\n[PULANDO] Empresa {idx + 1}/{total_empresas} - {empresa['razao_social']} (ja processada)")
-            continue
-        
-        print(f"\n{'=' * 80}")
-        print(f"PROCESSANDO EMPRESA {idx + 1}/{total_empresas}")
-        print(f"{'=' * 80}")
-        
-        res = executar_empresa(empresa)
-        resultados.append({
-            "empresa": empresa,
-            "resultado": res,
-            "inicio": res["inicio"],
-            "fim": res["fim"]
-        })
-        
-        # ✅ SALVAR CHECKPOINT após cada empresa
-        salvar_checkpoint(idx, empresa, total_empresas)
-        
-        # Salvar report parcial (para não perder dados)
-        salvar_report(resultados)
+    start_idx = 0
+    processadas_checkpoint = set()
+    ck_ultimo_indice = -1
+    if USAR_CHECKPOINT:
+        ck = carregar_checkpoint(CHECKPOINT_PATH)
+        processadas_checkpoint = ck["processadas"]
+        ck_ultimo_indice = int(ck.get("ultimo_indice", -1))
+        if processadas_checkpoint:
+            print(f"Checkpoint ativo: {len(processadas_checkpoint)} empresas já processadas serão puladas.")
+        if CONTINUAR_DE_ONDE_PAROU and ck_ultimo_indice >= 0:
+            start_idx = ck_ultimo_indice + 1
+            print(f"Retomando a partir do índice {start_idx} (checkpoint).")
 
-    # ========================================
-    # FINALIZAÇÃO
-    # ========================================
-    limpar_checkpoint()  # Remove checkpoint ao concluir
-    
-    salvar_report(resultados)
-    
+    ja_processadas = set(concluidas) | set(processadas_checkpoint)
+
+    resultados = carregar_rows_report_existente(REPORT_PATH) if CONTINUAR_DE_ONDE_PAROU else []
+    if CONTINUAR_DE_ONDE_PAROU:
+        garantir_report_com_header(REPORT_PATH)
+    else:
+        resetar_report(REPORT_PATH)
+    cnpjs_ja_no_report = {re.sub(r"\D", "", r["empresa"].get("cnpj", "")) for r in resultados if r.get("empresa")}
+
+    last_idx_concluido = start_idx - 1
+    try:
+        for idx, empresa in enumerate(empresas[start_idx:], start=start_idx):
+            cnpj_limpo = re.sub(r"\D", "", empresa.get("cnpj", ""))
+
+            if cnpj_limpo and cnpj_limpo in ja_processadas:
+                # Atualiza checkpoint mesmo quando pula, para retomar do ponto exato
+                last_idx_concluido = idx
+                if USAR_CHECKPOINT:
+                    salvar_checkpoint(CHECKPOINT_PATH, processadas_checkpoint, idx)
+
+                if cnpj_limpo in cnpjs_ja_no_report:
+                    continue
+
+                agora = datetime.now()
+                resultado = {
+                    "status": "SUCESSO",
+                    "motivo": "Pulada por retomada/checkpoint (já processada)",
+                    "tentativas": 0,
+                    "inicio": agora,
+                    "fim": agora,
+                }
+                row = {"empresa": empresa, "resultado": resultado, "inicio": agora, "fim": agora}
+                resultados.append(row)
+                cnpjs_ja_no_report.add(cnpj_limpo)
+                append_report_row(REPORT_PATH, row)
+                continue
+
+            try:
+                res = executar_empresa(empresa)
+            except Exception as e:
+                agora = datetime.now()
+                res = {
+                    "status": "FALHA",
+                    "motivo": f"Erro inesperado no orquestrador: {str(e)[:160]}",
+                    "tentativas": 0,
+                    "inicio": agora,
+                    "fim": agora,
+                }
+
+            row = {"empresa": empresa, "resultado": res, "inicio": res["inicio"], "fim": res["fim"]}
+            resultados.append(row)
+            if cnpj_limpo:
+                cnpjs_ja_no_report.add(cnpj_limpo)
+            append_report_row(REPORT_PATH, row)
+
+            if cnpj_limpo and res.get("status") in STATUS_SUCESSO:
+                ja_processadas.add(cnpj_limpo)
+                if USAR_CHECKPOINT:
+                    processadas_checkpoint.add(cnpj_limpo)
+
+            last_idx_concluido = idx
+            if USAR_CHECKPOINT:
+                # Atualiza SEMPRE o índice (sucesso ou falha) para retomar do ponto exato
+                salvar_checkpoint(CHECKPOINT_PATH, processadas_checkpoint, idx)
+
+    except KeyboardInterrupt:
+        print("\nInterrompido pelo usuário (Ctrl+C). Salvando checkpoint e encerrando...")
+        if USAR_CHECKPOINT:
+            salvar_checkpoint(CHECKPOINT_PATH, processadas_checkpoint, last_idx_concluido)
+        return
+    except Exception:
+        print("\nErro inesperado no loop principal. Salvando checkpoint antes de sair...")
+        print(traceback.format_exc())
+        if USAR_CHECKPOINT:
+            salvar_checkpoint(CHECKPOINT_PATH, processadas_checkpoint, last_idx_concluido)
+        raise
+
     total = len(resultados)
-    ok = sum(1 for r in resultados if r["resultado"]["status"] in {"SUCESSO", "SUCESSO_SEM_COMPETENCIA"})
+    ok = sum(1 for r in resultados if r["resultado"]["status"] in STATUS_SUCESSO)
     falha = total - ok
-    
     print("\n" + "=" * 80)
-    print("PROCESSAMENTO FINALIZADO")
-    print("=" * 80)
-    print(f"Total processado nesta execucao: {total}")
-    print(f"Sucesso: {ok} | Falha: {falha}")
+    print(f"Processamento finalizado. Total={total} | Sucesso={ok} | Falha={falha}")
     print(f"Report: {REPORT_PATH}")
-    print("=" * 80)
+
+    if USAR_CHECKPOINT and os.path.exists(CHECKPOINT_PATH):
+        if falha == 0:
+            os.remove(CHECKPOINT_PATH)
+            print(f"Checkpoint removido ao final: {CHECKPOINT_PATH}")
+        else:
+            print(f"Checkpoint mantido para retomada: {CHECKPOINT_PATH}")
 
 
 if __name__ == "__main__":

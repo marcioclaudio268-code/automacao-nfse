@@ -1,0 +1,10 @@
+Traceback (most recent call last):
+  File "C:\Users\Windows 11\Desktop\NFS XML\automacao-nfse\main.py", line 1927, in <module>
+    main()
+    ~~~~^^
+  File "C:\Users\Windows 11\Desktop\NFS XML\automacao-nfse\main.py", line 1781, in main
+    preencher_login_prefeitura_se_habilitado()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\Windows 11\Desktop\NFS XML\automacao-nfse\main.py", line 384, in preencher_login_prefeitura_se_habilitado
+    raise RuntimeError("AUTO_LOGIN_PREFEITURA ativo, mas EMPRESA_CNPJ/EMPRESA_SENHA não informados")
+RuntimeError: AUTO_LOGIN_PREFEITURA ativo, mas EMPRESA_CNPJ/EMPRESA_SENHA não informados

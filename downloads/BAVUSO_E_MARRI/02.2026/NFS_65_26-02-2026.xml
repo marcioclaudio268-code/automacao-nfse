@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<NFSe xmlns="http://www.sped.fazenda.gov.br/nfse" versao="1.00">
+<infNFSe Id="NFS35060031233598338000146000000000006526020522702364">
+<xLocEmi>BAURU</xLocEmi>
+<xLocPrestacao>Lucélia</xLocPrestacao>
+<nNFSe>65</nNFSe>
+<cLocIncid>3506003</cLocIncid>
+<xLocIncid>Bauru</xLocIncid>
+<xTribNac>Cobrança em geral.</xTribNac>
+<verAplic>SilTecnologia_v1.00</verAplic>
+<ambGer>1</ambGer>
+<tpEmis>2</tpEmis>
+<cStat>100</cStat>
+<dhProc>2026-02-26T00:00:00-03:00</dhProc>
+<nDFSe>52270236</nDFSe>
+<emit>
+<CNPJ>33598338000146</CNPJ>
+<IM>585830</IM>
+<xNome>BAVUSO &amp; MARRI ASSESSORIA EM EQUINOS LTDA</xNome>
+<enderNac>
+<xLgr>17053-843 - RUA PRIMO ANTONIO LANDI, 2120</xLgr>
+<nro>0</nro>
+<xBairro>RES. LAGO SUL</xBairro>
+<cMun>3506003</cMun>
+<UF>SP</UF>
+<CEP>17053843</CEP>
+</enderNac>
+<fone>1432358900</fone>
+<email>CONTRATOS@JRASSESSORIA.COM.BR</email>
+</emit>
+<valores>
+<vBC>12805.71</vBC>
+<pAliqAplic>2.95</pAliqAplic>
+<vISSQN>377.77</vISSQN>
+<vLiq>12805.71</vLiq>
+</valores>
+<DPS versao="1.00">
+<infDPS Id="DPS350600323359833800014649999000000000000065">
+<tpAmb>1</tpAmb>
+<dhEmi>2026-02-26T00:00:00-03:00</dhEmi>
+<verAplic>SilTecnologia_v1.00</verAplic>
+<serie>49999</serie>
+<nDPS>65</nDPS>
+<dCompet>2026-02-01</dCompet>
+<tpEmit>1</tpEmit>
+<cLocEmi>3506003</cLocEmi>
+<prest>
+<CNPJ>33598338000146</CNPJ>
+<IM>585830</IM>
+<fone>1432358900</fone>
+<email>CONTRATOS@JRASSESSORIA.COM.BR</email>
+<regTrib>
+<opSimpNac>3</opSimpNac>
+<regApTribSN/>
+<regEspTrib>0</regEspTrib>
+</regTrib>
+</prest>
+<toma>
+<CNPJ>38096250000140</CNPJ>
+<xNome>WV EVENTOS LTDA</xNome>
+<end>
+<endNac>
+<cMun>3527405</cMun>
+<CEP>17780061</CEP>
+</endNac>
+<xLgr>AV. BRASIL, 1521</xLgr>
+<nro>1521</nro>
+<xBairro>CENTRO</xBairro>
+</end>
+</toma>
+<serv>
+<locPrest>
+<cLocPrestacao>3527405</cLocPrestacao>
+</locPrest>
+<cServ>
+<cTribNac>172201</cTribNac>
+<xDescServ>PRESTAÇÃO DE SERVIÇOS ASSESSORIA DE LEILÃO</xDescServ>
+<cNBS>118062000</cNBS>
+</cServ>
+</serv>
+<valores>
+<vServPrest>
+<vServ>12805.71</vServ>
+</vServPrest>
+<trib>
+<tribMun>
+<tribISSQN>1</tribISSQN>
+<tpRetISSQN>1</tpRetISSQN>
+</tribMun>
+<tribFed/>
+<totTrib>
+<vTotTrib>
+<vTotTribFed>0.00</vTotTribFed>
+<vTotTribEst>0.00</vTotTribEst>
+<vTotTribMun>377.77</vTotTribMun>
+</vTotTrib>
+</totTrib>
+</trib>
+</valores>
+</infDPS>
+</DPS>
+</infNFSe>
+</NFSe>
+

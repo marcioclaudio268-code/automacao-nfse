@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<NFSe xmlns="http://www.sped.fazenda.gov.br/nfse" versao="1.00">
+<infNFSe Id="NFS35060031224125988000183000000000007426020522723102">
+<xLocEmi>BAURU</xLocEmi>
+<xLocPrestacao>Bauru</xLocPrestacao>
+<nNFSe>74</nNFSe>
+<cLocIncid>3506003</cLocIncid>
+<xLocIncid>Bauru</xLocIncid>
+<xTribNac>Instrução, treinamento, orientação pedagógica e educacional, avaliação de conhecimentos de qualquer natureza.</xTribNac>
+<verAplic>SilTecnologia_v1.00</verAplic>
+<ambGer>1</ambGer>
+<tpEmis>2</tpEmis>
+<cStat>100</cStat>
+<dhProc>2026-02-26T00:00:00-03:00</dhProc>
+<nDFSe>52272310</nDFSe>
+<emit>
+<CNPJ>24125988000183</CNPJ>
+<IM>555612</IM>
+<xNome>A.L.G.PEREIRA CONSERVATORIO</xNome>
+<enderNac>
+<xLgr>17015-210 - RUA AZARIAS LEITE, 9-61</xLgr>
+<nro>0</nro>
+<xBairro>CENTRO</xBairro>
+<cMun>3506003</cMun>
+<UF>SP</UF>
+<CEP>17015210</CEP>
+</enderNac>
+<fone>1432358907</fone>
+<email>contratos@jrassessoria.com.br</email>
+</emit>
+<valores>
+<vBC>5830.00</vBC>
+<pAliqAplic>2.00</pAliqAplic>
+<vISSQN>116.60</vISSQN>
+<vLiq>5830.00</vLiq>
+</valores>
+<DPS versao="1.00">
+<infDPS Id="DPS350600322412598800018349999000000000000074">
+<tpAmb>1</tpAmb>
+<dhEmi>2026-02-26T00:00:00-03:00</dhEmi>
+<verAplic>SilTecnologia_v1.00</verAplic>
+<serie>49999</serie>
+<nDPS>74</nDPS>
+<dCompet>2026-02-01</dCompet>
+<tpEmit>1</tpEmit>
+<cLocEmi>3506003</cLocEmi>
+<prest>
+<CNPJ>24125988000183</CNPJ>
+<IM>555612</IM>
+<fone>1432358907</fone>
+<email>contratos@jrassessoria.com.br</email>
+<regTrib>
+<opSimpNac>3</opSimpNac>
+<regApTribSN/>
+<regEspTrib>0</regEspTrib>
+</regTrib>
+</prest>
+<serv>
+<locPrest>
+<cLocPrestacao>3506003</cLocPrestacao>
+</locPrest>
+<cServ>
+<cTribNac>080201</cTribNac>
+<xDescServ>SERVIÇOS PRESTADOS REF 01/2026</xDescServ>
+<cNBS>122051900</cNBS>
+</cServ>
+</serv>
+<valores>
+<vServPrest>
+<vServ>5830.00</vServ>
+</vServPrest>
+<trib>
+<tribMun>
+<tribISSQN>1</tribISSQN>
+<tpRetISSQN>1</tpRetISSQN>
+</tribMun>
+<tribFed/>
+<totTrib>
+<vTotTrib>
+<vTotTribFed>0.00</vTotTribFed>
+<vTotTribEst>0.00</vTotTribEst>
+<vTotTribMun>116.60</vTotTribMun>
+</vTotTrib>
+</totTrib>
+</trib>
+</valores>
+</infDPS>
+</DPS>
+</infNFSe>
+</NFSe>
+
