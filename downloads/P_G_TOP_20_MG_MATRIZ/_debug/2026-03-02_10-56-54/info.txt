@@ -1,5 +1,0 @@
-timestamp=2026-03-02_10-56-54
-motivo=RuntimeError inesperado
-url=chrome://new-tab-page/
-title=Nova guia
-exception=RuntimeError: AUTO_LOGIN_PREFEITURA ativo, mas EMPRESA_CNPJ/EMPRESA_SENHA não informados
