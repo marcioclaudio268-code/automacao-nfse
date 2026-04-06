@@ -44,4 +44,4 @@ def test_write_manual_company_csv_is_compatible_with_orquestrador_loader(tmp_pat
 
     carregadas = oq.carregar_empresas(str(csv_path))
 
-    assert carregadas == [empresa]
+    assert carregadas == [{**empresa, "indice_lista": 1, "linha_planilha": 2}]

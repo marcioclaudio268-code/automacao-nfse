@@ -182,3 +182,37 @@ O robô possui tratamento de falha e tenta novamente automaticamente.
 
 
 
+---
+
+
+
+## Execucao em lote por faixa
+
+
+
+Para rodar a lista inteira, sem faixa, use o orquestrador:
+
+
+
+```powershell
+python orquestrador_empresas.py
+```
+
+
+
+Para processar apenas um lote da planilha:
+
+
+
+```powershell
+$env:EMPRESA_INICIO = "1"
+$env:EMPRESA_FIM = "100"
+python orquestrador_empresas.py
+```
+
+
+
+Se `EMPRESA_INICIO` e `EMPRESA_FIM` ficarem vazios, o comportamento continua igual ao atual: todas as empresas validas da planilha sao processadas.
+
+
+
