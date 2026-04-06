@@ -216,3 +216,27 @@ Se `EMPRESA_INICIO` e `EMPRESA_FIM` ficarem vazios, o comportamento continua igu
 
 
 
+## Resumo geral por empresa
+
+Ao final de cada execucao, o orquestrador gera um resumo consolidado por empresa na mesma pasta de saida do lote.
+
+Sem faixa:
+
+- `resumo_execucao_empresas.xlsx`
+- se `openpyxl` nao estiver disponivel no ambiente, o fallback e `.csv`
+
+Com faixa:
+
+- `resumo_execucao_empresas__lote_001_100.xlsx`
+- se `openpyxl` nao estiver disponivel no ambiente, o fallback e `.csv`
+
+Exemplo em PowerShell:
+
+```powershell
+$env:EMPRESA_INICIO = "1"
+$env:EMPRESA_FIM = "100"
+python orquestrador_empresas.py
+```
+
+
+

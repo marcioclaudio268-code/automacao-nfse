@@ -77,6 +77,7 @@ def test_main_registra_revisao_manual_multiplas_no_report(monkeypatch, tmp_path)
     monkeypatch.setattr(oq, "append_report_row", lambda *args, **kwargs: rows.append((args, kwargs)))
     monkeypatch.setattr(oq, "resetar_report", lambda *_: None)
     monkeypatch.setattr(oq, "garantir_report_com_header", lambda *_: None)
+    monkeypatch.setattr(oq, "salvar_resumo_execucao", lambda *args, **kwargs: None)
 
     oq.main()
 
@@ -103,7 +104,59 @@ def test_main_fluxo_pulado_nao_usa_variavel_res_inexistente(monkeypatch, tmp_pat
     monkeypatch.setattr(oq, "append_report_row", lambda *args, **kwargs: rows.append((args, kwargs)))
     monkeypatch.setattr(oq, "garantir_report_com_header", lambda *_: None)
     monkeypatch.setattr(oq, "resetar_report", lambda *_: None)
+    monkeypatch.setattr(oq, "salvar_resumo_execucao", lambda *args, **kwargs: None)
 
     oq.main()
 
     assert len(rows) == 1
+
+
+def test_main_chama_resumo_no_final(monkeypatch, tmp_path):
+    csv_path = tmp_path / "empresas.xlsx"
+    csv_path.write_text("stub", encoding="utf-8")
+
+    empresa = _empresa_dummy()
+    chamadas = []
+
+    monkeypatch.setattr(oq, "CSV_EMPRESAS", str(csv_path))
+    monkeypatch.setattr(oq, "CONTINUAR_DE_ONDE_PAROU", False)
+    monkeypatch.setattr(oq, "USAR_CHECKPOINT", False)
+    monkeypatch.setattr(oq, "carregar_empresas", lambda _: [empresa])
+    monkeypatch.setattr(
+        oq,
+        "executar_empresa",
+        lambda _: {
+            "status": "SUCESSO",
+            "motivo": "OK",
+            "tentativas": 1,
+            "acao_recomendada": "",
+            "inicio": oq.datetime.now(),
+            "fim": oq.datetime.now(),
+        },
+    )
+    monkeypatch.setattr(oq, "append_report_row", lambda *args, **kwargs: None)
+    monkeypatch.setattr(oq, "resetar_report", lambda *_: None)
+    monkeypatch.setattr(oq, "garantir_report_com_header", lambda *_: None)
+    monkeypatch.setattr(
+        oq,
+        "salvar_resumo_execucao",
+        lambda resultados, empresas, output_base_dir, inicio=None, fim=None, competencia_dir_name="": chamadas.append(
+            {
+                "resultados": resultados,
+                "empresas": empresas,
+                "output_base_dir": output_base_dir,
+                "inicio": inicio,
+                "fim": fim,
+                "competencia_dir_name": competencia_dir_name,
+            }
+        )
+        or str(tmp_path / "resumo_execucao_empresas.xlsx"),
+    )
+
+    oq.main()
+
+    assert len(chamadas) == 1
+    assert chamadas[0]["inicio"] is None
+    assert chamadas[0]["fim"] is None
+    assert chamadas[0]["empresas"] == [empresa]
+    assert chamadas[0]["resultados"][0]["resultado"]["status"] == "SUCESSO"

@@ -9,8 +9,19 @@ import unicodedata
 from datetime import datetime
 from pathlib import Path
 
+from application.artifact_locator_service import ArtifactLocatorService
+from core.config_runtime import competencia_alvo_dir_name
 from core.app_info import APP_MAIN_BUNDLE_NAME, APP_MAIN_EXE_NAME
 from core.company_paths import nome_pasta_empresa_por_dados
+from core.paths import build_runtime_paths
+
+try:
+    from openpyxl import Workbook
+
+    RESUMO_USA_XLSX = True
+except Exception:
+    Workbook = None
+    RESUMO_USA_XLSX = False
 
 
 def get_runtime_base() -> Path:
@@ -56,6 +67,22 @@ os.makedirs(OUTPUT_BASE_DIR, exist_ok=True)
 CSV_EMPRESAS = os.environ.get("EMPRESAS_ARQUIVO", os.environ.get("EMPRESAS_CSV", "empresas.xlsx"))
 REPORT_PATH = os.path.join(OUTPUT_BASE_DIR, "report_execucao_empresas.csv")
 CHECKPOINT_PATH = os.path.join(OUTPUT_BASE_DIR, "checkpoint_execucao_empresas.json")
+RESUMO_BASE_NAME = "resumo_execucao_empresas"
+RESUMO_HEADER = [
+    "indice_lista",
+    "linha_planilha",
+    "empresa",
+    "codigo",
+    "cnpj",
+    "competencia",
+    "status_execucao",
+    "teve_iss",
+    "teve_prestados",
+    "teve_tomados",
+    "erro_tipo",
+    "erro_resumo",
+]
+ARTIFACT_LOCATOR = ArtifactLocatorService()
 MAX_TENTATIVAS = int(os.environ.get("MAX_TENTATIVAS_EMPRESA", "3"))
 LOGIN_WAIT_SECONDS = int(os.environ.get("LOGIN_WAIT_SECONDS", "120"))
 TIMEOUT_PROCESSO_MAIN = int(os.environ.get("TIMEOUT_PROCESSO_MAIN", "1800"))
@@ -307,11 +334,24 @@ def resolver_paths_execucao(output_base_dir, inicio=None, fim=None):
     if inicio is None or fim is None:
         return report_path, checkpoint_path
 
-    largura = max(3, len(str(max(int(inicio), int(fim)))))
-    sufixo = f"__lote_{int(inicio):0{largura}d}_{int(fim):0{largura}d}"
+    sufixo = _sufixo_lote(inicio, fim)
     report_path = os.path.join(output_base_dir, f"report_execucao_empresas{sufixo}.csv")
     checkpoint_path = os.path.join(output_base_dir, f"checkpoint_execucao_empresas{sufixo}.json")
     return report_path, checkpoint_path
+
+
+def _sufixo_lote(inicio=None, fim=None) -> str:
+    if inicio is None or fim is None:
+        return ""
+
+    largura = max(3, len(str(max(int(inicio), int(fim)))))
+    return f"__lote_{int(inicio):0{largura}d}_{int(fim):0{largura}d}"
+
+
+def resolver_path_resumo_execucao(output_base_dir, inicio=None, fim=None) -> str:
+    ext = ".xlsx" if RESUMO_USA_XLSX else ".csv"
+    sufixo = _sufixo_lote(inicio, fim)
+    return os.path.join(output_base_dir, f"{RESUMO_BASE_NAME}{sufixo}{ext}")
 
 
 def carregar_report_existente(path_report: str):
@@ -601,6 +641,233 @@ def append_report_row(path_report: str, row):
         ])
 
 
+def resolver_competencia_execucao() -> str:
+    apuracao_ref = os.environ.get("APURACAO_REFERENCIA", "").strip() or datetime.now().strftime("%m/%Y")
+    try:
+        return competencia_alvo_dir_name(apuracao_ref)
+    except Exception:
+        return ""
+
+
+def _normalizar_digitos(valor: str) -> str:
+    return re.sub(r"\D", "", valor or "")
+
+
+def _mapear_empresas_por_cnpj(empresas: list[dict]) -> dict[str, list[dict]]:
+    mapa: dict[str, list[dict]] = {}
+    for empresa in empresas:
+        cnpj = _normalizar_digitos(empresa.get("cnpj", ""))
+        if not cnpj:
+            continue
+        mapa.setdefault(cnpj, []).append(dict(empresa))
+    return mapa
+
+
+def _enriquecer_empresa_para_resumo(empresa: dict, mapa_empresas: dict[str, list[dict]]) -> dict:
+    if empresa.get("indice_lista") and empresa.get("linha_planilha"):
+        return dict(empresa)
+
+    cnpj = _normalizar_digitos(empresa.get("cnpj", ""))
+    candidatos = mapa_empresas.get(cnpj) or []
+    if candidatos:
+        base = dict(candidatos.pop(0))
+        for chave, valor in empresa.items():
+            if valor and not base.get(chave):
+                base[chave] = valor
+        return base
+
+    return dict(empresa)
+
+
+def _tem_arquivos_em_pasta(pasta: Path) -> bool:
+    try:
+        return pasta.exists() and any(pasta.iterdir())
+    except Exception:
+        return False
+
+
+def _teve_prestados(artifacts) -> bool:
+    try:
+        if artifacts.log_downloads.exists():
+            return True
+        return _tem_arquivos_em_pasta(artifacts.competencia_dir / "PRESTADOS")
+    except Exception:
+        return False
+
+
+def _teve_tomados(artifacts) -> bool:
+    try:
+        if artifacts.log_tomados.exists():
+            return True
+        return _tem_arquivos_em_pasta(artifacts.competencia_dir / "TOMADOS")
+    except Exception:
+        return False
+
+
+def _teve_iss(artifacts) -> bool:
+    try:
+        if not artifacts.log_manual.exists():
+            return False
+        with open(artifacts.log_manual, "r", encoding="utf-8") as f:
+            for line in f:
+                upper = line.upper()
+                if "GUIA_ISS=" in upper and "SKIP_PERFIL" not in upper:
+                    return True
+    except Exception:
+        pass
+
+    try:
+        for padrao in ("PRESTADOS/GUIA_ISS_*.pdf", "TOMADOS/GUIA_ISS_*.pdf"):
+            if list(artifacts.competencia_dir.glob(padrao)):
+                return True
+    except Exception:
+        pass
+
+    return False
+
+
+def _resumir_texto(texto: str, limite: int = 180) -> str:
+    texto_limpo = re.sub(r"\s+", " ", (texto or "")).strip()
+    return texto_limpo[:limite]
+
+
+def _classificar_erro_execucao(status: str, motivo: str) -> tuple[str, str]:
+    status_norm = (status or "").strip().upper()
+    motivo_limpo = _resumir_texto(motivo, 500)
+    motivo_norm = motivo_limpo.lower()
+
+    if status_norm in {"SUCESSO", "SUCESSO_SEM_COMPETENCIA", "SUCESSO_SEM_SERVICOS"}:
+        return "", ""
+
+    if status_norm == "REVISAO_MANUAL":
+        if "pdf" in motivo_norm and "tomados" in motivo_norm:
+            return "TOMADOS_PDF", motivo_limpo[:180]
+        if "empresa_multipla" in motivo_norm:
+            return "EMPRESA_MULTIPLA", motivo_limpo[:180]
+        if "multiplos_cadastros" in motivo_norm:
+            return "MULTI_CADASTRO", motivo_limpo[:180]
+        if "credencial invalida" in motivo_norm:
+            return "CREDENCIAL_INVALIDA", motivo_limpo[:180]
+        if "captcha" in motivo_norm:
+            return "CAPTCHA", motivo_limpo[:180]
+        return "REVISAO_MANUAL", motivo_limpo[:180]
+
+    if status_norm == "FALHA":
+        if "captcha" in motivo_norm:
+            return "CAPTCHA_TIMEOUT", motivo_limpo[:180]
+        if "servicos tomados" in motivo_norm:
+            return "TOMADOS_FALHA", motivo_limpo[:180]
+        if "webdriver" in motivo_norm or "chrome" in motivo_norm:
+            return "CHROME_INIT_FALHA", motivo_limpo[:180]
+        if "timeout" in motivo_norm:
+            return "TIMEOUT", motivo_limpo[:180]
+        return "FALHA", motivo_limpo[:180]
+
+    return status_norm or "FALHA", motivo_limpo[:180]
+
+
+def construir_linhas_resumo_execucao(
+    resultados: list[dict],
+    empresas: list[dict],
+    output_base_dir: str,
+    competencia_dir_name: str = "",
+) -> list[dict]:
+    runtime_paths = build_runtime_paths(Path(get_runtime_base()), Path(output_base_dir))
+    competencia_dir_name = (competencia_dir_name or "").strip() or resolver_competencia_execucao()
+    mapa_empresas = _mapear_empresas_por_cnpj(empresas)
+    linhas: list[dict] = []
+
+    for row in resultados:
+        empresa_base = _enriquecer_empresa_para_resumo(row.get("empresa") or {}, mapa_empresas)
+        resultado = row.get("resultado") or {}
+        artifacts = ARTIFACT_LOCATOR.get_company_artifacts(runtime_paths, empresa_base, competencia_dir_name=competencia_dir_name)
+        status_execucao = (resultado.get("status") or "").strip()
+        erro_tipo, erro_resumo = _classificar_erro_execucao(status_execucao, resultado.get("motivo") or "")
+        competencia = artifacts.competencia_dir.name if re.fullmatch(r"\d{2}\.\d{4}", artifacts.competencia_dir.name or "") else ""
+
+        linhas.append(
+            {
+                "indice_lista": empresa_base.get("indice_lista", ""),
+                "linha_planilha": empresa_base.get("linha_planilha", ""),
+                "empresa": empresa_base.get("razao_social", ""),
+                "codigo": empresa_base.get("codigo", ""),
+                "cnpj": empresa_base.get("cnpj", ""),
+                "competencia": competencia,
+                "status_execucao": status_execucao,
+                "teve_iss": "SIM" if _teve_iss(artifacts) else "NAO",
+                "teve_prestados": "SIM" if _teve_prestados(artifacts) else "NAO",
+                "teve_tomados": "SIM" if _teve_tomados(artifacts) else "NAO",
+                "erro_tipo": erro_tipo,
+                "erro_resumo": erro_resumo,
+            }
+        )
+
+    return linhas
+
+
+def escrever_resumo_execucao(path_resumo: str, linhas: list[dict]) -> str:
+    if path_resumo.lower().endswith(".xlsx"):
+        if Workbook is None:
+            raise RuntimeError("openpyxl nao disponivel para gerar resumo XLSX.")
+
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Resumo"
+        ws.append(RESUMO_HEADER)
+        for linha in linhas:
+            ws.append([linha.get(col, "") for col in RESUMO_HEADER])
+        if ws.max_row > 1:
+            ws.auto_filter.ref = ws.dimensions
+        ws.freeze_panes = "A2"
+        wb.save(path_resumo)
+        return path_resumo
+
+    with open(path_resumo, "w", newline="", encoding="utf-8-sig") as f:
+        writer = csv.writer(f, delimiter=";")
+        writer.writerow(RESUMO_HEADER)
+        for linha in linhas:
+            writer.writerow([
+                linha.get("indice_lista", ""),
+                linha.get("linha_planilha", ""),
+                linha.get("empresa", ""),
+                linha.get("codigo", ""),
+                linha.get("cnpj", ""),
+                linha.get("competencia", ""),
+                linha.get("status_execucao", ""),
+                linha.get("teve_iss", ""),
+                linha.get("teve_prestados", ""),
+                linha.get("teve_tomados", ""),
+                linha.get("erro_tipo", ""),
+                linha.get("erro_resumo", ""),
+            ])
+    return path_resumo
+
+
+def salvar_resumo_execucao(
+    resultados: list[dict],
+    empresas: list[dict],
+    output_base_dir: str,
+    inicio=None,
+    fim=None,
+    competencia_dir_name: str = "",
+) -> str | None:
+    linhas = construir_linhas_resumo_execucao(resultados, empresas, output_base_dir, competencia_dir_name=competencia_dir_name)
+    path_resumo = resolver_path_resumo_execucao(output_base_dir, inicio, fim)
+
+    try:
+        return escrever_resumo_execucao(path_resumo, linhas)
+    except Exception as exc:
+        print(f"Falha ao gerar resumo em {path_resumo}: {type(exc).__name__}: {exc}")
+        if path_resumo.lower().endswith(".xlsx"):
+            fallback = str(Path(path_resumo).with_suffix(".csv"))
+            try:
+                print(f"Tentando fallback CSV: {fallback}")
+                return escrever_resumo_execucao(fallback, linhas)
+            except Exception as fallback_exc:
+                print(f"Falha ao gerar resumo CSV: {type(fallback_exc).__name__}: {fallback_exc}")
+        return None
+
+
 def main():
     if not os.path.exists(CSV_EMPRESAS):
         print(f"Arquivo de empresas nÃ£o encontrado: {CSV_EMPRESAS}")
@@ -615,6 +882,7 @@ def main():
     except ValueError as e:
         raise SystemExit(str(e)) from e
     report_path, checkpoint_path = resolver_paths_execucao(OUTPUT_BASE_DIR, faixa_inicio, faixa_fim)
+    competencia_dir_name = resolver_competencia_execucao()
 
     faixa_txt = "todas" if faixa_inicio is None else f"{faixa_inicio}-{faixa_fim}"
     print(f"Faixa aplicada: {faixa_txt}")
@@ -743,6 +1011,21 @@ def main():
             print(f"Checkpoint removido ao final: {checkpoint_path}")
         else:
             print(f"Checkpoint mantido para retomada: {checkpoint_path}")
+
+    try:
+        resumo_path = salvar_resumo_execucao(
+            resultados,
+            empresas,
+            OUTPUT_BASE_DIR,
+            faixa_inicio,
+            faixa_fim,
+            competencia_dir_name=competencia_dir_name,
+        )
+        if resumo_path:
+            print(f"Resumo: {resumo_path}")
+    except Exception:
+        print("Falha inesperada ao consolidar o resumo geral.")
+        print(traceback.format_exc())
 
 
 if __name__ == "__main__":
