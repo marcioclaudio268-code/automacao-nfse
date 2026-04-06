@@ -256,6 +256,29 @@ $env:EMPRESAS = "101,115,833"
 python orquestrador_empresas.py
 ```
 
+
+## Saidas gerais centralizadas
+
+Os arquivos continuam sendo salvos por empresa e, depois disso, sao espelhados em uma pasta geral para consolidacao operacional.
+
+- `SAIDAS_GERAIS/ISS/<competencia>/`
+- `SAIDAS_GERAIS/XML_TOMADOS/<competencia>/`
+
+Exemplos de nome final:
+
+- `SAIDAS_GERAIS/ISS/02.2026/00833_ABS_REPRESENTACOES_ISS_02-2026.pdf`
+- `SAIDAS_GERAIS/XML_TOMADOS/02.2026/00833_ABS_REPRESENTACOES_SERVICOS_TOMADOS_02-2026.xml`
+
+O nome espelhado usa, quando disponivel:
+
+- codigo da empresa
+- slug ou nome curto da empresa
+- tipo do documento
+- competencia
+- extensao original
+
+O salvamento por empresa continua sendo a fonte primaria de verdade; o espelhamento e secundario e nao substitui o arquivo original.
+
 ```powershell
 $env:FILTRAR_ERRO_TIPO = "LOGIN_INVALIDO"
 python orquestrador_empresas.py

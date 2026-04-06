@@ -21,6 +21,7 @@ def test_salvar_xml_tomados_salva_em_tomados_por_competencia(monkeypatch, tmp_pa
     origem = tmp_path / "tomados.xml"
     origem.write_text("<xml />", encoding="utf-8")
 
+    monkeypatch.setattr(main, "OUTPUT_BASE_DIR", str(tmp_path))
     monkeypatch.setattr(main, "DOWNLOAD_DIR", str(tmp_path))
     monkeypatch.setattr(main, "EMPRESA_PASTA", "833_EMPRESA")
 
@@ -115,6 +116,7 @@ def test_multi_cadastro_prefixa_artefatos_no_mes_sem_subpastas(monkeypatch, tmp_
     origem_tomados = tmp_path / "tomados.xml"
     origem_tomados.write_text("<xml />", encoding="utf-8")
 
+    monkeypatch.setattr(main, "OUTPUT_BASE_DIR", str(tmp_path))
     monkeypatch.setattr(main, "DOWNLOAD_DIR", str(tmp_path))
     monkeypatch.setattr(main, "EMPRESA_PASTA", "833_EMPRESA")
     monkeypatch.setattr(main, "APURACAO_REFERENCIA", "03/2026")

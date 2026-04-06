@@ -28,7 +28,7 @@ from urllib import parse as urllib_parse
 from urllib import error as urllib_error
 from pathlib import Path
 
-from core.company_paths import normalizar_nome_empresa
+from core.company_paths import normalizar_nome_empresa, normalizar_codigo_empresa
 from core.config_runtime import competencias_alvo as runtime_competencias_alvo, validate_apuracao_referencia
 
 # =====================
@@ -4589,6 +4589,107 @@ def mover_com_retry(src, dst, tentativas=6):
             sleep(0.3 + i * 0.4)
     raise last
 
+
+def _competencia_saida_geral(ano_alvo: int = 0, mes_alvo: int = 0, competencia: str = "") -> str:
+    competencia = (competencia or "").strip()
+    if competencia:
+        return competencia
+    if ano_alvo and mes_alvo:
+        return f"{mes_alvo:02d}.{ano_alvo}"
+    return ""
+
+
+def pasta_saida_geral(raiz: str, ano_alvo: int = 0, mes_alvo: int = 0, competencia: str = "") -> str:
+    competencia_dir = _competencia_saida_geral(ano_alvo=ano_alvo, mes_alvo=mes_alvo, competencia=competencia)
+    if not competencia_dir:
+        competencia_dir = "SEM_COMPETENCIA"
+    return os.path.join(OUTPUT_BASE_DIR, "SAIDAS_GERAIS", (raiz or "").strip().upper(), competencia_dir)
+
+
+def _identidade_saida_geral_atual() -> tuple[str, str]:
+    ctx = contexto_cadastro_atual()
+    codigo = normalizar_codigo_empresa(ctx.get("ccm") or ctx.get("codigo") or "")
+    slug_origem = (
+        globals().get("EMPRESA_PASTA")
+        or ctx.get("identificacao")
+        or ""
+    )
+    slug = normalizar_nome_empresa(slug_origem)
+    if not slug:
+        slug = "EMPRESA_DESCONHECIDA"
+    if codigo and slug.startswith(f"{codigo}_"):
+        codigo = ""
+    return codigo, slug
+
+
+def _nome_arquivo_saida_geral(caminho_origem: str, tipo_documento: str, ano_alvo: int, mes_alvo: int) -> str:
+    codigo, slug = _identidade_saida_geral_atual()
+    partes = []
+    if codigo:
+        partes.append(codigo)
+    if slug and slug not in partes:
+        partes.append(slug)
+    if not partes:
+        partes.append("EMPRESA_DESCONHECIDA")
+
+    tipo = re.sub(r"[^A-Z0-9_]+", "_", (tipo_documento or "").strip().upper()).strip("_") or "DOCUMENTO"
+    competencia = f"{mes_alvo:02d}-{ano_alvo}" if ano_alvo and mes_alvo else "SEM_COMPETENCIA"
+    partes.extend([tipo, competencia])
+
+    nome_base = re.sub(r"_+", "_", "_".join(partes)).strip("_")
+    ext = os.path.splitext(caminho_origem)[1] or ""
+    return f"{nome_base}{ext}"
+
+
+def espelhar_arquivo_em_saida_geral(
+    caminho_origem: str,
+    raiz_saida_geral: str,
+    ano_alvo: int,
+    mes_alvo: int,
+    tipo_documento: str = "",
+    competencia: str = "",
+) -> str:
+    codigo, slug = _identidade_saida_geral_atual()
+    competencia_log = _competencia_saida_geral(ano_alvo=ano_alvo, mes_alvo=mes_alvo, competencia=competencia)
+    empresa_log = codigo or slug or "EMPRESA_DESCONHECIDA"
+
+    try:
+        if not caminho_origem or not os.path.isfile(caminho_origem):
+            raise FileNotFoundError(f"Arquivo original inexistente para espelhamento: {caminho_origem}")
+
+        pasta_destino = pasta_saida_geral(
+            raiz_saida_geral,
+            ano_alvo=ano_alvo,
+            mes_alvo=mes_alvo,
+            competencia=competencia,
+        )
+        os.makedirs(pasta_destino, exist_ok=True)
+
+        nome_final = _nome_arquivo_saida_geral(caminho_origem, tipo_documento or raiz_saida_geral, ano_alvo, mes_alvo)
+        destino_final = os.path.join(pasta_destino, nome_final)
+        if os.path.exists(destino_final):
+            base, ext = os.path.splitext(nome_final)
+            k = 1
+            while True:
+                cand = os.path.join(pasta_destino, f"{base}_{k}{ext}")
+                if not os.path.exists(cand):
+                    destino_final = cand
+                    break
+                k += 1
+
+        shutil.copy2(caminho_origem, destino_final)
+        print(
+            f"[SAIDAS_GERAIS] {raiz_saida_geral}=OK | EMPRESA={empresa_log} | COMPETENCIA={competencia_log or 'SEM_COMPETENCIA'} "
+            f"| DESTINO={destino_final}"
+        )
+        return destino_final
+    except Exception as exc:
+        print(
+            f"[SAIDAS_GERAIS] {raiz_saida_geral}=ERRO | EMPRESA={empresa_log} | COMPETENCIA={competencia_log or 'SEM_COMPETENCIA'} "
+            f"| {type(exc).__name__}: {str(exc)[:180]}"
+        )
+        return ""
+
 def organizar_xml_por_pasta(caminho_xml, info):
     """
     Move para:
@@ -6149,6 +6250,7 @@ def salvar_xml_tomados(xml_tmp_path: str, ano_alvo: int, mes_alvo: int) -> str:
             k += 1
 
     mover_com_retry(xml_tmp_path, destino_final)
+    espelhar_arquivo_em_saida_geral(destino_final, "XML_TOMADOS", ano_alvo, mes_alvo, "SERVICOS_TOMADOS")
     return destino_final
 
 
@@ -6234,6 +6336,7 @@ def salvar_pdf_guia(pdf_tmp_path: str, modulo_up: str, ano_alvo: int, mes_alvo: 
             k += 1
 
     mover_com_retry(pdf_tmp_path, destino_final)
+    espelhar_arquivo_em_saida_geral(destino_final, "ISS", ano_alvo, mes_alvo)
     return destino_final
 
 
