@@ -1,3 +1,4 @@
 selenium
 openpyxl
 pytest
+PySide6

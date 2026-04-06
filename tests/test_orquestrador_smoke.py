@@ -14,26 +14,16 @@ def _empresa_dummy():
 
 
 def test_executar_empresa_rc0_com_alertas(monkeypatch):
-    saida = "\n".join(
-        [
-            "execucao iniciada",
-            oq.MSG_ALERTA_TOMADOS,
-            oq.MSG_ALERTA_PRESTADOS,
-            "execucao finalizada",
-        ]
-    )
-
     monkeypatch.setattr(
         oq.subprocess,
         "run",
-        lambda *args, **kwargs: SimpleNamespace(returncode=0, stdout=saida, stderr=""),
+        lambda *args, **kwargs: SimpleNamespace(returncode=0, stdout="execucao iniciada\nexecucao finalizada", stderr=""),
     )
 
     res = oq.executar_empresa(_empresa_dummy())
 
     assert res["status"] == "SUCESSO"
-    assert "FECHADO" in res["motivo"]
-    assert "com alertas: tomados, prestados" in res["motivo"]
+    assert res["motivo"] == "OK"
 
 
 def test_executar_empresa_rc_empresa_multipla(monkeypatch):
@@ -45,11 +35,24 @@ def test_executar_empresa_rc_empresa_multipla(monkeypatch):
 
     res = oq.executar_empresa(_empresa_dummy())
 
-    assert res["status"] == "SUCESSO"
+    assert res["status"] == "REVISAO_MANUAL"
     assert "EMPRESA_MULTIPLA" in res["motivo"]
 
 
-def test_main_anexa_report_multiplas_no_fluxo_normal(monkeypatch, tmp_path):
+def test_executar_empresa_rc_multi_cadastro_revisao_manual(monkeypatch):
+    monkeypatch.setattr(
+        oq.subprocess,
+        "run",
+        lambda *args, **kwargs: SimpleNamespace(returncode=oq.EXIT_CODE_MULTI_CADASTRO_REVISAO_MANUAL, stdout="", stderr=""),
+    )
+
+    res = oq.executar_empresa(_empresa_dummy())
+
+    assert res["status"] == "REVISAO_MANUAL"
+    assert "MULTIPLOS_CADASTROS" in res["motivo"]
+
+
+def test_main_registra_revisao_manual_multiplas_no_report(monkeypatch, tmp_path):
     csv_path = tmp_path / "empresas.xlsx"
     csv_path.write_text("stub", encoding="utf-8")
 
@@ -62,8 +65,8 @@ def test_main_anexa_report_multiplas_no_fluxo_normal(monkeypatch, tmp_path):
         oq,
         "executar_empresa",
         lambda _: {
-            "status": "SUCESSO",
-            "motivo": "Revisar manualmente: EMPRESA_MULTIPLA (Cadastros Relacionados)",
+            "status": "REVISAO_MANUAL",
+            "motivo": "EMPRESA_MULTIPLA",
             "tentativas": 1,
             "inicio": oq.datetime.now(),
             "fim": oq.datetime.now(),
@@ -71,17 +74,14 @@ def test_main_anexa_report_multiplas_no_fluxo_normal(monkeypatch, tmp_path):
     )
 
     rows = []
-    multiplas = []
     monkeypatch.setattr(oq, "append_report_row", lambda *args, **kwargs: rows.append((args, kwargs)))
-    monkeypatch.setattr(oq, "append_report_multiplas_row", lambda *args, **kwargs: multiplas.append((args, kwargs)))
     monkeypatch.setattr(oq, "resetar_report", lambda *_: None)
     monkeypatch.setattr(oq, "garantir_report_com_header", lambda *_: None)
-    monkeypatch.setattr(oq, "atualizar_resumo_falhas_parcial", lambda *_: None)
 
     oq.main()
 
     assert len(rows) == 1
-    assert len(multiplas) == 1
+    assert rows[0][0][1]["resultado"]["status"] == "REVISAO_MANUAL"
 
 
 def test_main_fluxo_pulado_nao_usa_variavel_res_inexistente(monkeypatch, tmp_path):
@@ -101,10 +101,8 @@ def test_main_fluxo_pulado_nao_usa_variavel_res_inexistente(monkeypatch, tmp_pat
 
     rows = []
     monkeypatch.setattr(oq, "append_report_row", lambda *args, **kwargs: rows.append((args, kwargs)))
-    monkeypatch.setattr(oq, "append_report_multiplas_row", lambda *_: None)
     monkeypatch.setattr(oq, "garantir_report_com_header", lambda *_: None)
     monkeypatch.setattr(oq, "resetar_report", lambda *_: None)
-    monkeypatch.setattr(oq, "atualizar_resumo_falhas_parcial", lambda *_: None)
 
     oq.main()
 

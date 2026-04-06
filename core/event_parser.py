@@ -37,6 +37,35 @@ def parse_log_line(line: str) -> ParsedEvent:
 
     lower = text.lower()
 
+    if text.startswith("[stderr]"):
+        return ParsedEvent(kind="stderr", raw=line, etapa="Erro", mensagem=text)
+
+    if text.startswith("[MANUAL-LOGIN]"):
+        return ParsedEvent(kind="etapa", raw=line, etapa="Aguardando captcha", mensagem=text)
+
+    if text.startswith("[MANUAL-FINAL]") or text.startswith("[MANUAL]"):
+        if "CONTINUANDO_EXECUCAO_MANUAL" in text:
+            return ParsedEvent(kind="manual_resumed", raw=line, etapa="Livros / Manual", mensagem=text)
+        return ParsedEvent(kind="manual_wait", raw=line, etapa="Livros / Manual", mensagem=text)
+
+    if "worker_interrompido" in lower or "interrompido pelo usuario" in lower:
+        return ParsedEvent(kind="interrompido", raw=line, etapa="Interrompido", mensagem=text)
+
+    if "credencial invalida" in lower or "credencial inválida" in lower:
+        return ParsedEvent(kind="erro", raw=line, etapa="Login", mensagem=text)
+
+    if "timeout" in lower:
+        return ParsedEvent(kind="erro", raw=line, etapa="Erro", mensagem=text)
+
+    if "falha tentativa" in lower or "[tomados] erro" in lower or "[prestados] erro" in lower:
+        return ParsedEvent(kind="erro", raw=line, etapa="Erro", mensagem=text)
+
+    if lower.startswith("erro") or "erro inesperado" in lower:
+        return ParsedEvent(kind="erro", raw=line, etapa="Erro", mensagem=text)
+
+    if "processamento finalizado" in lower or text == "Processo finalizado.":
+        return ParsedEvent(kind="final", raw=line, etapa="Concluido", mensagem=text)
+
     if "etapa 1:" in lower or "login automatico" in lower:
         return ParsedEvent(kind="etapa", raw=line, etapa="Login", mensagem=text)
 
@@ -51,12 +80,6 @@ def parse_log_line(line: str) -> ParsedEvent:
 
     if "livro" in lower or "guia" in lower or "manual" in lower:
         return ParsedEvent(kind="etapa", raw=line, etapa="Livros / Manual", mensagem=text)
-
-    if "processamento finalizado" in lower:
-        return ParsedEvent(kind="final", raw=line, etapa="Concluído", mensagem=text)
-
-    if "falha tentativa" in lower or "erro" in lower:
-        return ParsedEvent(kind="erro", raw=line, etapa="Erro", mensagem=text)
 
     return ParsedEvent(kind="log", raw=line, mensagem=text)
 

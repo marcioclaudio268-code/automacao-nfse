@@ -7,7 +7,8 @@ import sys
 from pathlib import Path
 
 
-PROJECT_DIR = Path(__file__).resolve().parent
+APP_DIR = Path(__file__).resolve().parent
+PROJECT_DIR = APP_DIR.parent
 ORQUESTRADOR_PATH = PROJECT_DIR / "orquestrador_empresas.py"
 
 
@@ -56,11 +57,16 @@ def main() -> int:
         universal_newlines=True,
     )
 
-    assert proc.stdout is not None
+    if proc.stdout is None:
+        print("ERRO: stdout do subprocesso nao disponivel", flush=True)
+        proc.terminate()
+        return 1
+
     try:
         for line in proc.stdout:
             print(line.rstrip("\n"), flush=True)
     except KeyboardInterrupt:
+        print("WORKER_INTERROMPIDO", flush=True)
         proc.terminate()
         return 130
 
