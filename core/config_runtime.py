@@ -80,6 +80,10 @@ class RuntimeConfig:
     apuracao_referencia: str
     output_base_dir: Path
     execution_profile: ExecutionProfile = field(default_factory=ExecutionProfile)
+    empresa_inicio: str = ""
+    empresa_fim: str = ""
+    empresas: str = ""
+    filtrar_erro_tipo: str = ""
     continuar_de_onde_parou: bool = True
     usar_checkpoint: bool = True
     login_wait_seconds: int = 120
@@ -105,6 +109,26 @@ class RuntimeConfig:
 
         if self.timeout_processo_main <= 0:
             raise ValueError("timeout_processo_main deve ser maior que zero")
+
+        self.empresa_inicio = (self.empresa_inicio or "").strip()
+        self.empresa_fim = (self.empresa_fim or "").strip()
+        self.empresas = (self.empresas or "").strip()
+        self.filtrar_erro_tipo = (self.filtrar_erro_tipo or "").strip()
+
+        if bool(self.empresa_inicio) != bool(self.empresa_fim):
+            raise ValueError("Faixa de execucao invalida. Informe inicio e fim, ou deixe ambos vazios.")
+
+        if self.empresa_inicio:
+            try:
+                inicio = int(self.empresa_inicio)
+                fim = int(self.empresa_fim)
+            except Exception as exc:
+                raise ValueError("Faixa de execucao invalida. Inicio e fim devem ser inteiros positivos.") from exc
+
+            if inicio <= 0 or fim <= 0:
+                raise ValueError("Faixa de execucao invalida. Inicio e fim devem ser inteiros positivos.")
+            if inicio > fim:
+                raise ValueError("Faixa de execucao invalida. Inicio nao pode ser maior que fim.")
 
         self.execution_profile.validate()
         self.output_base_dir.mkdir(parents=True, exist_ok=True)

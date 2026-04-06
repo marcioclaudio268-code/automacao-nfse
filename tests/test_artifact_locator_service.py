@@ -1,6 +1,6 @@
 from application.artifact_locator_service import ArtifactLocatorService
 from core.config_runtime import competencia_alvo_dir_name
-from core.paths import build_runtime_paths
+from core.paths import RESUMO_USA_XLSX, build_runtime_paths
 
 
 def test_competencia_alvo_dir_name_uses_previous_month():
@@ -108,3 +108,15 @@ def test_artifact_locator_faz_fallback_para_logs_e_debug_na_raiz_legada(tmp_path
     assert artifacts.log_tomados == legacy_company_dir / "log_tomados.txt"
     assert artifacts.log_manual == legacy_company_dir / "log_fechamento_manual.txt"
     assert artifacts.debug_dir == legacy_company_dir / "_debug"
+
+
+def test_build_runtime_paths_respeita_lote_e_resumo(tmp_path):
+    project_dir = tmp_path / "project"
+    output_dir = tmp_path / "output"
+
+    runtime_paths = build_runtime_paths(project_dir, output_dir, "1", "100")
+
+    assert runtime_paths.report_path.name == "report_execucao_empresas__lote_001_100.csv"
+    assert runtime_paths.checkpoint_path.name == "checkpoint_execucao_empresas__lote_001_100.json"
+    ext_resumo = ".xlsx" if RESUMO_USA_XLSX else ".csv"
+    assert runtime_paths.summary_path.name == f"resumo_execucao_empresas__lote_001_100{ext_resumo}"

@@ -58,6 +58,29 @@ class ExecutionController(QObject):
             cnpj = only_digits(empresa.get("cnpj", ""))
             self.company_data_by_cnpj[cnpj] = empresa
 
+    def build_process_env_vars(self, cfg: RuntimeConfig) -> dict[str, str]:
+        env_vars = {
+            "PYTHONUNBUFFERED": "1",
+            "EMPRESAS_ARQUIVO": str(cfg.empresas_arquivo),
+            "APURACAO_REFERENCIA": cfg.apuracao_referencia,
+            "OUTPUT_BASE_DIR": str(cfg.output_base_dir),
+            "EXECUTION_CONTROL_DIR": str(self.control_dir) if self.control_dir else "",
+            "LOGIN_WAIT_SECONDS": str(cfg.login_wait_seconds),
+            "TIMEOUT_PROCESSO_MAIN": str(cfg.timeout_processo_main),
+            "CONTINUAR_DE_ONDE_PAROU": "1" if cfg.continuar_de_onde_parou else "0",
+            "USAR_CHECKPOINT": "1" if cfg.usar_checkpoint else "0",
+            "PERFIL_EXECUCAO_ATIVO": "0",
+            "EMPRESA_INICIO": cfg.empresa_inicio.strip(),
+            "EMPRESA_FIM": cfg.empresa_fim.strip(),
+            "EMPRESAS": cfg.empresas.strip(),
+            "FILTRAR_ERRO_TIPO": cfg.filtrar_erro_tipo.strip(),
+        }
+
+        if not cfg.execution_profile.is_default():
+            env_vars.update(cfg.execution_profile.as_env())
+
+        return env_vars
+
     def start(self, cfg: RuntimeConfig) -> None:
         if self.process is not None:
             self.process_failed.emit("Ja existe um lote em execucao.")
@@ -79,20 +102,8 @@ class ExecutionController(QObject):
         self.manual_wait_changed.emit({"active": False})
 
         env = QProcessEnvironment.systemEnvironment()
-        env.insert("PYTHONUNBUFFERED", "1")
-        env.insert("EMPRESAS_ARQUIVO", str(cfg.empresas_arquivo))
-        env.insert("APURACAO_REFERENCIA", cfg.apuracao_referencia)
-        env.insert("OUTPUT_BASE_DIR", str(cfg.output_base_dir))
-        env.insert("EXECUTION_CONTROL_DIR", str(self.control_dir))
-        env.insert("LOGIN_WAIT_SECONDS", str(cfg.login_wait_seconds))
-        env.insert("TIMEOUT_PROCESSO_MAIN", str(cfg.timeout_processo_main))
-        env.insert("CONTINUAR_DE_ONDE_PAROU", "1" if cfg.continuar_de_onde_parou else "0")
-        env.insert("USAR_CHECKPOINT", "1" if cfg.usar_checkpoint else "0")
-        env.insert("PERFIL_EXECUCAO_ATIVO", "0")
-
-        if not cfg.execution_profile.is_default():
-            for key, value in cfg.execution_profile.as_env().items():
-                env.insert(key, value)
+        for key, value in self.build_process_env_vars(cfg).items():
+            env.insert(key, value)
 
         launch = self.resolve_orchestrator_launch()
 

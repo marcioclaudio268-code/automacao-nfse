@@ -7,6 +7,7 @@ from pathlib import Path
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
+    QComboBox,
     QCheckBox,
     QFileDialog,
     QFormLayout,
@@ -226,6 +227,37 @@ class MainWindow(QMainWindow):
         form.addRow("Mes atual:", self.mes_atual_edit)
         form.addRow("Mes de apuracao:", self.apuracao_edit)
         form.addRow("Pasta base:", row_saida)
+
+        faixa_row = QHBoxLayout()
+        self.empresa_inicio_edit = QLineEdit()
+        self.empresa_inicio_edit.setPlaceholderText("Inicio")
+        self.empresa_fim_edit = QLineEdit()
+        self.empresa_fim_edit.setPlaceholderText("Fim")
+        faixa_row.addWidget(QLabel("Inicio"))
+        faixa_row.addWidget(self.empresa_inicio_edit)
+        faixa_row.addWidget(QLabel("Fim"))
+        faixa_row.addWidget(self.empresa_fim_edit)
+
+        self.empresas_edit = QLineEdit()
+        self.empresas_edit.setPlaceholderText("101,115,833")
+
+        self.filtrar_erro_combo = QComboBox()
+        self.filtrar_erro_combo.addItems(
+            [
+                "",
+                "LOGIN_INVALIDO",
+                "ARQUIVO",
+                "CAPTCHA",
+                "TIMEOUT",
+                "ERRO_PORTAL",
+                "SEM_MOVIMENTO",
+                "DESCONHECIDO",
+            ]
+        )
+
+        form.addRow("Faixa de execucao:", faixa_row)
+        form.addRow("Empresas explicitas:", self.empresas_edit)
+        form.addRow("Filtro por erro:", self.filtrar_erro_combo)
         return group
 
     def _build_group_etapas(self) -> QGroupBox:
@@ -587,6 +619,10 @@ class MainWindow(QMainWindow):
             self.apuracao_edit,
             self.output_edit,
             self.btn_output,
+            self.empresa_inicio_edit,
+            self.empresa_fim_edit,
+            self.empresas_edit,
+            self.filtrar_erro_combo,
             self.chk_prestados,
             self.chk_tomados,
             self.chk_xml,
@@ -609,9 +645,18 @@ class MainWindow(QMainWindow):
             apuracao_referencia=self.apuracao_edit.text().strip(),
             output_base_dir=Path(output_text),
             execution_profile=self.build_execution_profile(),
+            empresa_inicio=self.empresa_inicio_edit.text().strip(),
+            empresa_fim=self.empresa_fim_edit.text().strip(),
+            empresas=self.empresas_edit.text().strip(),
+            filtrar_erro_tipo=self.filtrar_erro_combo.currentText().strip(),
         )
         cfg.validate()
-        self.runtime_paths = build_runtime_paths(PROJECT_DIR, cfg.output_base_dir)
+        self.runtime_paths = build_runtime_paths(
+            PROJECT_DIR,
+            cfg.output_base_dir,
+            cfg.empresa_inicio,
+            cfg.empresa_fim,
+        )
         self.controller.runtime_paths = self.runtime_paths
         return cfg
 
@@ -707,6 +752,13 @@ class MainWindow(QMainWindow):
 
             self.log_edit.clear()
             self.append_log("Iniciando lote...")
+            faixa_txt = "todas" if not cfg.empresa_inicio else f"{cfg.empresa_inicio}-{cfg.empresa_fim}"
+            self.append_log(f"Faixa aplicada: {faixa_txt}")
+            self.append_log(f"Empresas explicitas: {cfg.empresas or 'nenhuma'}")
+            self.append_log(f"Filtro por erro: {cfg.filtrar_erro_tipo or 'nenhum'}")
+            self.append_log(f"Report esperado: {self.runtime_paths.report_path}")
+            self.append_log(f"Checkpoint esperado: {self.runtime_paths.checkpoint_path}")
+            self.append_log(f"Resumo esperado: {self.runtime_paths.summary_path}")
             self.controller.runtime_paths = self.runtime_paths
             self.controller.start(cfg)
         except Exception as e:
@@ -724,7 +776,6 @@ class MainWindow(QMainWindow):
         self.lbl_manual_status.setText("Nenhuma etapa manual aguardando.")
         self.btn_manual_continue.setEnabled(False)
         self.append_log(f"Controle manual: {self.controller.control_dir}")
-        self.append_log(f"Report esperado: {self.runtime_paths.report_path}")
 
     def on_process_finished(self, exit_code: int, exit_status: int) -> None:
         was_stop_requested = self.controller.stop_requested or exit_code == 130
@@ -927,7 +978,12 @@ class MainWindow(QMainWindow):
         output_text = self.output_edit.text().strip()
         if not output_text:
             return
-        self.runtime_paths = build_runtime_paths(PROJECT_DIR, Path(output_text))
+        self.runtime_paths = build_runtime_paths(
+            PROJECT_DIR,
+            Path(output_text),
+            self.empresa_inicio_edit.text().strip(),
+            self.empresa_fim_edit.text().strip(),
+        )
         self.controller.runtime_paths = self.runtime_paths
 
     def update_execution_count(self) -> None:

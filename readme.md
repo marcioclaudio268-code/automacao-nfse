@@ -257,6 +257,17 @@ python orquestrador_empresas.py
 ```
 
 
+## GUI
+
+A interface grafica expõe os mesmos filtros da orquestracao:
+
+- faixa de execucao (`EMPRESA_INICIO` / `EMPRESA_FIM`)
+- empresas explicitas (`EMPRESAS`)
+- filtro por erro (`FILTRAR_ERRO_TIPO`)
+
+Quando a faixa for usada, a GUI passa a usar os caminhos do lote para `report`, `checkpoint` e `resumo_execucao_empresas`.
+
+
 ## Saidas gerais centralizadas
 
 Os arquivos continuam sendo salvos por empresa e, depois disso, sao espelhados em uma pasta geral para consolidacao operacional.
