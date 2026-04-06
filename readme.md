@@ -240,3 +240,34 @@ python orquestrador_empresas.py
 
 
 
+## Reprocessamento seletivo
+
+O orquestrador aceita filtros para reexecutar somente subconjuntos uteis.
+
+- `EMPRESAS` usa o `codigo` da planilha como identificador principal, separado por virgula.
+- `FILTRAR_ERRO_TIPO` aceita: `LOGIN_INVALIDO`, `ARQUIVO`, `CAPTCHA`, `TIMEOUT`, `ERRO_PORTAL`, `SEM_MOVIMENTO` e `DESCONHECIDO`.
+- A ordem aplicada e: faixa -> `EMPRESAS` -> `FILTRAR_ERRO_TIPO`.
+- O filtro por erro usa o `resumo_execucao_empresas` do mesmo escopo e, se ele nao existir, faz fallback para `report_execucao_empresas`.
+
+Exemplos em PowerShell:
+
+```powershell
+$env:EMPRESAS = "101,115,833"
+python orquestrador_empresas.py
+```
+
+```powershell
+$env:FILTRAR_ERRO_TIPO = "LOGIN_INVALIDO"
+python orquestrador_empresas.py
+```
+
+```powershell
+$env:EMPRESA_INICIO = "1"
+$env:EMPRESA_FIM = "100"
+$env:EMPRESAS = "101,115,833"
+$env:FILTRAR_ERRO_TIPO = "LOGIN_INVALIDO"
+python orquestrador_empresas.py
+```
+
+
+

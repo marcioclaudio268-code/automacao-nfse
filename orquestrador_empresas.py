@@ -12,7 +12,7 @@ from pathlib import Path
 from application.artifact_locator_service import ArtifactLocatorService
 from core.config_runtime import competencia_alvo_dir_name
 from core.app_info import APP_MAIN_BUNDLE_NAME, APP_MAIN_EXE_NAME
-from core.company_paths import nome_pasta_empresa_por_dados
+from core.company_paths import nome_pasta_empresa_por_dados, normalizar_codigo_empresa
 from core.paths import build_runtime_paths
 
 try:
@@ -102,6 +102,31 @@ EXIT_CODE_CHROME_INIT_FALHA = 60
 ARQUIVO_STATUS_TOMADOS_PDF = "_tomados_pdf_status.json"
 STATUS_SUCESSO = {"SUCESSO", "SUCESSO_SEM_COMPETENCIA", "SUCESSO_SEM_SERVICOS"}
 STATUS_FINAIS_NAO_REPROCESSAR = STATUS_SUCESSO | {"REVISAO_MANUAL"}
+ERRO_TIPOS_OPERACIONAIS = {
+    "LOGIN_INVALIDO",
+    "ARQUIVO",
+    "CAPTCHA",
+    "TIMEOUT",
+    "ERRO_PORTAL",
+    "SEM_MOVIMENTO",
+    "DESCONHECIDO",
+}
+ERRO_TIPOS_LEGADOS = {
+    "CREDENCIAL_INVALIDA": "LOGIN_INVALIDO",
+    "CAPTCHA_TIMEOUT": "CAPTCHA",
+    "CAPTCHA_INCORRETO": "CAPTCHA",
+    "TOMADOS_PDF": "ARQUIVO",
+    "TOMADOS_FALHA": "ARQUIVO",
+    "CHROME_INIT_FALHA": "ERRO_PORTAL",
+    "EMPRESA_MULTIPLA": "ERRO_PORTAL",
+    "MULTI_CADASTRO": "ERRO_PORTAL",
+    "APURACAO_COMPLETA": "ERRO_PORTAL",
+    "REVISAO_MANUAL": "ERRO_PORTAL",
+    "SEM_COMPETENCIA": "SEM_MOVIMENTO",
+    "SEM_SERVICOS": "SEM_MOVIMENTO",
+    "SUCESSO_SEM_COMPETENCIA": "SEM_MOVIMENTO",
+    "SUCESSO_SEM_SERVICOS": "SEM_MOVIMENTO",
+}
 
 
 def inferir_acao_recomendada(status: str, motivo: str = "") -> str:
@@ -327,6 +352,55 @@ def resolver_faixa_execucao(empresas):
     return inicio, fim, empresas_filtradas
 
 
+def _mapear_erro_por_codigo(registros_fonte: list[dict]) -> dict[str, str]:
+    mapa: dict[str, str] = {}
+    for registro in registros_fonte or []:
+        empresa = registro.get("empresa") or {}
+        resultado = registro.get("resultado") or {}
+        codigo = normalizar_codigo_empresa(empresa.get("codigo") or empresa.get("codigo_empresa") or "")
+        if not codigo:
+            continue
+        mapa[codigo] = classificar_erro_execucao(
+            resultado.get("status") or resultado.get("status_execucao") or "",
+            resultado.get("motivo") or resultado.get("erro_resumo") or "",
+            resultado.get("erro_tipo") or "",
+        )
+    return mapa
+
+
+def filtrar_empresas_por_criterios(
+    empresas: list[dict],
+    empresas_explicitadas: tuple[str, ...] = (),
+    tipos_erro: tuple[str, ...] = (),
+    registros_fonte: list[dict] | None = None,
+) -> list[dict]:
+    selecionadas = list(empresas)
+
+    if empresas_explicitadas:
+        codigos_explicitados = {normalizar_codigo_empresa(codigo) for codigo in empresas_explicitadas if codigo}
+        selecionadas = [
+            empresa
+            for empresa in selecionadas
+            if normalizar_codigo_empresa(empresa.get("codigo", "")) in codigos_explicitados
+        ]
+
+    if tipos_erro:
+        if registros_fonte is None:
+            raise ValueError(
+                "FILTRAR_ERRO_TIPO foi informado, mas nenhuma fonte de resumo/report foi encontrada para o escopo atual."
+            )
+        categorias_desejadas = {categoria for categoria in tipos_erro if categoria}
+        mapa_erro = _mapear_erro_por_codigo(registros_fonte)
+        selecionadas = [
+            empresa
+            for empresa in selecionadas
+            if mapa_erro.get(normalizar_codigo_empresa(empresa.get("codigo", "")), "DESCONHECIDO")
+            in categorias_desejadas
+        ]
+
+    return selecionadas
+
+
 def resolver_paths_execucao(output_base_dir, inicio=None, fim=None):
     report_path = os.path.join(output_base_dir, "report_execucao_empresas.csv")
     checkpoint_path = os.path.join(output_base_dir, "checkpoint_execucao_empresas.json")
@@ -352,6 +426,216 @@ def resolver_path_resumo_execucao(output_base_dir, inicio=None, fim=None) -> str
     ext = ".xlsx" if RESUMO_USA_XLSX else ".csv"
     sufixo = _sufixo_lote(inicio, fim)
     return os.path.join(output_base_dir, f"{RESUMO_BASE_NAME}{sufixo}{ext}")
+
+
+def _normalizar_token_erro(valor: str) -> str:
+    token = (valor or "").strip().upper()
+    token = token.replace("-", "_").replace(" ", "_")
+    token = re.sub(r"[^A-Z0-9_]+", "_", token)
+    token = re.sub(r"_+", "_", token).strip("_")
+    return token
+
+
+def _resolver_categoria_erro_entrada(valor: str) -> str:
+    token = _normalizar_token_erro(valor)
+    if not token:
+        return ""
+
+    token = ERRO_TIPOS_LEGADOS.get(token, token)
+    if token in ERRO_TIPOS_OPERACIONAIS:
+        return token
+    raise ValueError(
+        f"FILTRAR_ERRO_TIPO invalido: {valor!r}. Valores aceitos: {', '.join(sorted(ERRO_TIPOS_OPERACIONAIS))}."
+    )
+
+
+def resolver_filtros_execucao() -> dict:
+    raw_erro = os.environ.get("FILTRAR_ERRO_TIPO", "").strip()
+    raw_empresas = os.environ.get("EMPRESAS", "").strip()
+
+    tipos_erro: list[str] = []
+    if raw_erro:
+        for token in re.split(r"[,\s;|]+", raw_erro):
+            if not token.strip():
+                continue
+            categoria = _resolver_categoria_erro_entrada(token)
+            if categoria and categoria not in tipos_erro:
+                tipos_erro.append(categoria)
+        if not tipos_erro:
+            raise ValueError(
+                "FILTRAR_ERRO_TIPO foi informado, mas nenhum valor valido foi encontrado."
+            )
+
+    empresas: list[str] = []
+    if raw_empresas:
+        for token in re.split(r"[,\s;|]+", raw_empresas):
+            if not token.strip():
+                continue
+            codigo = normalizar_codigo_empresa(token)
+            if codigo and codigo not in empresas:
+                empresas.append(codigo)
+        if not empresas:
+            raise ValueError("EMPRESAS foi informado, mas nenhum codigo valido foi encontrado.")
+
+    return {
+        "raw_erro": raw_erro,
+        "raw_empresas": raw_empresas,
+        "erro_tipos": tuple(tipos_erro),
+        "empresas": tuple(empresas),
+    }
+
+
+def _contem_qualquer(texto: str, marcadores: tuple[str, ...]) -> bool:
+    return any(marcador in texto for marcador in marcadores)
+
+
+def classificar_erro_execucao(status: str, motivo: str = "", erro_tipo_previo: str = "") -> str:
+    status_norm = _normalizar_token_erro(status)
+    motivo_norm = _resumir_texto(motivo, 500).lower()
+    erro_tipo_prev_raw = _normalizar_token_erro(erro_tipo_previo)
+    erro_tipo_norm = ERRO_TIPOS_LEGADOS.get(erro_tipo_prev_raw, erro_tipo_prev_raw)
+    if erro_tipo_prev_raw not in {"", "REVISAO_MANUAL", "DESCONHECIDO"} and erro_tipo_norm in ERRO_TIPOS_OPERACIONAIS:
+        return erro_tipo_norm
+    if erro_tipo_prev_raw in {"ERRO_PORTAL", "DESCONHECIDO"}:
+        return erro_tipo_norm
+
+    if status_norm in {"SUCESSO_SEM_COMPETENCIA", "SUCESSO_SEM_SERVICOS", "SEM_COMPETENCIA", "SEM_SERVICOS"}:
+        return "SEM_MOVIMENTO"
+    if status_norm == "SUCESSO":
+        if _contem_qualquer(
+            motivo_norm,
+            (
+                "sem notas na competencia",
+                "sem modulo de nota fiscal",
+                "sem movimento",
+            ),
+        ):
+            return "SEM_MOVIMENTO"
+        return ""
+
+    if _contem_qualquer(
+        motivo_norm,
+        (
+            "sem notas na competencia",
+            "sem modulo de nota fiscal",
+            "sem movimento",
+        ),
+    ):
+        return "SEM_MOVIMENTO"
+    if _contem_qualquer(
+        motivo_norm,
+        (
+            "captcha",
+            "captcha_n",
+        ),
+    ):
+        return "CAPTCHA"
+    if _contem_qualquer(
+        motivo_norm,
+        (
+            "credencial invalida",
+            "login invalido",
+            "senha invalida",
+            "senha incorreta",
+            "usuario invalido",
+            "login incorreto",
+        ),
+    ):
+        return "LOGIN_INVALIDO"
+    if _contem_qualquer(
+        motivo_norm,
+        (
+            "arquivo",
+            "xml",
+            "pdf",
+            "download",
+            "crdownload",
+            "nao gerado",
+            "sem location",
+            "resposta invalida",
+            "file not found",
+            "not found",
+            "servicos tomados",
+            "tomados pdf",
+            "pdf tomados",
+        ),
+    ):
+        return "ARQUIVO"
+    if _contem_qualquer(
+        motivo_norm,
+        (
+            "timeout",
+            "temporiz",
+        ),
+    ):
+        return "TIMEOUT"
+    if _contem_qualquer(
+        motivo_norm,
+        (
+            "empresa multipla",
+            "multiplos cadastros",
+            "apuracao completa",
+            "webdriver",
+            "chrome",
+            "portal",
+            "browser",
+            "naveg",
+            "sessao",
+            "http 502",
+            "http 503",
+            " 502",
+            " 503",
+            "falta de sessao",
+            "sessao expirada",
+            "falha inicializar chrome",
+            "falha na inicializacao do chrome",
+        ),
+    ):
+        return "ERRO_PORTAL"
+    if status_norm == "REVISAO_MANUAL":
+        return "ERRO_PORTAL" if _contem_qualquer(
+            motivo_norm,
+            (
+                "empresa multipla",
+                "multiplos cadastros",
+                "apuracao completa",
+                "webdriver",
+                "chrome",
+                "portal",
+                "browser",
+                "naveg",
+                "sessao",
+                "http 502",
+                "http 503",
+                " 502",
+                " 503",
+                "falha inicializar chrome",
+                "falha na inicializacao do chrome",
+            ),
+        ) else "DESCONHECIDO"
+    if status_norm == "FALHA":
+        return "ERRO_PORTAL" if _contem_qualquer(
+            motivo_norm,
+            (
+                "empresa multipla",
+                "multiplos cadastros",
+                "apuracao completa",
+                "webdriver",
+                "chrome",
+                "portal",
+                "browser",
+                "naveg",
+                "sessao",
+                "http 502",
+                "http 503",
+                " 502",
+                " 503",
+                "falha inicializar chrome",
+                "falha na inicializacao do chrome",
+            ),
+        ) else "DESCONHECIDO"
+
+    return "DESCONHECIDO"
 
 
 def carregar_report_existente(path_report: str):
@@ -421,6 +705,102 @@ def carregar_rows_report_existente(path_report: str):
         return rows
 
     return rows
+
+
+def _texto_campo(valor) -> str:
+    return "" if valor is None else str(valor).strip()
+
+
+def _registro_resumo_para_fonte(row: dict) -> dict:
+    empresa = {
+        "codigo": _texto_campo(row.get("codigo")),
+        "razao_social": _texto_campo(row.get("empresa")),
+        "cnpj": _texto_campo(row.get("cnpj")),
+        "indice_lista": _texto_campo(row.get("indice_lista")),
+        "linha_planilha": _texto_campo(row.get("linha_planilha")),
+    }
+    resultado = {
+        "status": _texto_campo(row.get("status_execucao")),
+        "motivo": _texto_campo(row.get("erro_resumo")),
+        "erro_tipo": _texto_campo(row.get("erro_tipo")),
+    }
+    return {"empresa": empresa, "resultado": resultado}
+
+
+def carregar_rows_resumo_existente(path_resumo: str):
+    rows = []
+    if not os.path.exists(path_resumo):
+        return rows
+
+    try:
+        if path_resumo.lower().endswith(".xlsx"):
+            try:
+                from openpyxl import load_workbook
+            except Exception as e:
+                raise RuntimeError("Para ler resumo .xlsx instale a dependência openpyxl") from e
+
+            wb = load_workbook(path_resumo, read_only=True, data_only=True)
+            ws = wb.active
+            linhas = ws.iter_rows(values_only=True)
+            header_raw = next(linhas, None)
+            if not header_raw:
+                return rows
+            header = [_texto_campo(valor) for valor in header_raw]
+            for linha in linhas:
+                row = {
+                    header[i]: _texto_campo(valor)
+                    for i, valor in enumerate(linha)
+                    if i < len(header) and header[i]
+                }
+                rows.append(_registro_resumo_para_fonte(row))
+        else:
+            with open(path_resumo, "r", encoding="utf-8-sig", newline="") as f:
+                reader = csv.DictReader(f, delimiter=";")
+                for row in reader:
+                    rows.append(_registro_resumo_para_fonte(row))
+    except Exception:
+        return rows
+
+    return rows
+
+
+def _caminhos_fonte_reprocessamento(output_base_dir: str, inicio=None, fim=None) -> list[str]:
+    sufixo = _sufixo_lote(inicio, fim)
+    caminhos = [
+        os.path.join(output_base_dir, f"{RESUMO_BASE_NAME}{sufixo}.xlsx"),
+        os.path.join(output_base_dir, f"{RESUMO_BASE_NAME}{sufixo}.csv"),
+        os.path.join(output_base_dir, f"report_execucao_empresas{sufixo}.csv"),
+    ]
+
+    if inicio is not None and fim is not None:
+        caminhos.extend(
+            [
+                os.path.join(output_base_dir, f"{RESUMO_BASE_NAME}.xlsx"),
+                os.path.join(output_base_dir, f"{RESUMO_BASE_NAME}.csv"),
+                os.path.join(output_base_dir, "report_execucao_empresas.csv"),
+            ]
+        )
+
+    return caminhos
+
+
+def carregar_registros_fonte_execucao(output_base_dir: str, inicio=None, fim=None):
+    for caminho in _caminhos_fonte_reprocessamento(output_base_dir, inicio, fim):
+        if not os.path.exists(caminho):
+            continue
+        try:
+            if Path(caminho).name.startswith(RESUMO_BASE_NAME):
+                registros = carregar_rows_resumo_existente(caminho)
+            else:
+                registros = carregar_rows_report_existente(caminho)
+        except Exception as exc:
+            print(f"Falha ao ler fonte de reprocessamento {caminho}: {type(exc).__name__}: {exc}")
+            continue
+
+        if registros:
+            return registros, caminho
+
+    return [], ""
 
 
 def carregar_checkpoint(path_checkpoint: str):
@@ -731,39 +1111,10 @@ def _resumir_texto(texto: str, limite: int = 180) -> str:
     return texto_limpo[:limite]
 
 
-def _classificar_erro_execucao(status: str, motivo: str) -> tuple[str, str]:
-    status_norm = (status or "").strip().upper()
-    motivo_limpo = _resumir_texto(motivo, 500)
-    motivo_norm = motivo_limpo.lower()
-
-    if status_norm in {"SUCESSO", "SUCESSO_SEM_COMPETENCIA", "SUCESSO_SEM_SERVICOS"}:
-        return "", ""
-
-    if status_norm == "REVISAO_MANUAL":
-        if "pdf" in motivo_norm and "tomados" in motivo_norm:
-            return "TOMADOS_PDF", motivo_limpo[:180]
-        if "empresa_multipla" in motivo_norm:
-            return "EMPRESA_MULTIPLA", motivo_limpo[:180]
-        if "multiplos_cadastros" in motivo_norm:
-            return "MULTI_CADASTRO", motivo_limpo[:180]
-        if "credencial invalida" in motivo_norm:
-            return "CREDENCIAL_INVALIDA", motivo_limpo[:180]
-        if "captcha" in motivo_norm:
-            return "CAPTCHA", motivo_limpo[:180]
-        return "REVISAO_MANUAL", motivo_limpo[:180]
-
-    if status_norm == "FALHA":
-        if "captcha" in motivo_norm:
-            return "CAPTCHA_TIMEOUT", motivo_limpo[:180]
-        if "servicos tomados" in motivo_norm:
-            return "TOMADOS_FALHA", motivo_limpo[:180]
-        if "webdriver" in motivo_norm or "chrome" in motivo_norm:
-            return "CHROME_INIT_FALHA", motivo_limpo[:180]
-        if "timeout" in motivo_norm:
-            return "TIMEOUT", motivo_limpo[:180]
-        return "FALHA", motivo_limpo[:180]
-
-    return status_norm or "FALHA", motivo_limpo[:180]
+def _classificar_erro_execucao(status: str, motivo: str, erro_tipo_previo: str = "") -> tuple[str, str]:
+    erro_tipo = classificar_erro_execucao(status, motivo, erro_tipo_previo)
+    erro_resumo = _resumir_texto(motivo, 180) if erro_tipo else ""
+    return erro_tipo, erro_resumo
 
 
 def construir_linhas_resumo_execucao(
@@ -782,7 +1133,11 @@ def construir_linhas_resumo_execucao(
         resultado = row.get("resultado") or {}
         artifacts = ARTIFACT_LOCATOR.get_company_artifacts(runtime_paths, empresa_base, competencia_dir_name=competencia_dir_name)
         status_execucao = (resultado.get("status") or "").strip()
-        erro_tipo, erro_resumo = _classificar_erro_execucao(status_execucao, resultado.get("motivo") or "")
+        erro_tipo, erro_resumo = _classificar_erro_execucao(
+            status_execucao,
+            resultado.get("motivo") or "",
+            resultado.get("erro_tipo") or "",
+        )
         competencia = artifacts.competencia_dir.name if re.fullmatch(r"\d{2}\.\d{4}", artifacts.competencia_dir.name or "") else ""
 
         linhas.append(
@@ -883,15 +1238,46 @@ def main():
         raise SystemExit(str(e)) from e
     report_path, checkpoint_path = resolver_paths_execucao(OUTPUT_BASE_DIR, faixa_inicio, faixa_fim)
     competencia_dir_name = resolver_competencia_execucao()
+    try:
+        filtros = resolver_filtros_execucao()
+    except ValueError as e:
+        raise SystemExit(str(e)) from e
+    filtros_ativos = bool(filtros["empresas"] or filtros["erro_tipos"])
+    usar_retomada = CONTINUAR_DE_ONDE_PAROU and not filtros_ativos
+    usar_checkpoint_retomada = USAR_CHECKPOINT and not filtros_ativos
+    registros_fonte = []
+    caminho_fonte = ""
+
+    if filtros_ativos and CONTINUAR_DE_ONDE_PAROU:
+        print("Filtros seletivos ativos: a retomada por report/checkpoint antigo sera ignorada nesta execucao.")
+    if filtros["erro_tipos"]:
+        registros_fonte, caminho_fonte = carregar_registros_fonte_execucao(OUTPUT_BASE_DIR, faixa_inicio, faixa_fim)
+        if not registros_fonte:
+            raise SystemExit(
+                "FILTRAR_ERRO_TIPO foi informado, mas nenhum resumo/report de origem foi encontrado para o escopo atual."
+            )
+    empresas = filtrar_empresas_por_criterios(
+        empresas,
+        filtros["empresas"],
+        filtros["erro_tipos"],
+        registros_fonte if filtros["erro_tipos"] else None,
+    )
 
     faixa_txt = "todas" if faixa_inicio is None else f"{faixa_inicio}-{faixa_fim}"
     print(f"Faixa aplicada: {faixa_txt}")
     print(f"Empresas selecionadas: {len(empresas)}")
     print(f"Report: {report_path}")
     print(f"Checkpoint: {checkpoint_path}")
+    print(f"Filtro empresas: {', '.join(filtros['empresas']) if filtros['empresas'] else 'nenhum'}")
+    print(f"Filtro erro: {', '.join(filtros['erro_tipos']) if filtros['erro_tipos'] else 'nenhum'}")
+    if caminho_fonte:
+        print(f"Fonte de erro: {caminho_fonte}")
+    if not empresas:
+        print("Nenhuma empresa foi selecionada pelos filtros atuais. Nada a executar.")
+        return
 
     concluidas = set()
-    if CONTINUAR_DE_ONDE_PAROU:
+    if usar_retomada:
         concluidas = carregar_report_existente(report_path)
         if concluidas:
             print(f"Retomada ativa: {len(concluidas)} empresas jÃ¡ concluÃ­das serÃ£o puladas.")
@@ -899,20 +1285,20 @@ def main():
     start_idx = 0
     processadas_checkpoint = set()
     ck_ultimo_indice = -1
-    if USAR_CHECKPOINT:
+    if usar_checkpoint_retomada:
         ck = carregar_checkpoint(checkpoint_path)
         processadas_checkpoint = ck["processadas"]
         ck_ultimo_indice = int(ck.get("ultimo_indice", -1))
         if processadas_checkpoint:
             print(f"Checkpoint ativo: {len(processadas_checkpoint)} empresas já processadas serão puladas.")
-        if CONTINUAR_DE_ONDE_PAROU and ck_ultimo_indice >= 0:
+        if usar_retomada and ck_ultimo_indice >= 0:
             start_idx = ck_ultimo_indice + 1
             print(f"Retomando a partir do índice {start_idx} (checkpoint).")
 
     ja_processadas = set(concluidas) | set(processadas_checkpoint)
 
-    resultados = carregar_rows_report_existente(report_path) if CONTINUAR_DE_ONDE_PAROU else []
-    if CONTINUAR_DE_ONDE_PAROU:
+    resultados = carregar_rows_report_existente(report_path) if usar_retomada else []
+    if usar_retomada:
         garantir_report_com_header(report_path)
     else:
         resetar_report(report_path)
