@@ -1,3 +1,5 @@
+import pytest
+
 import main
 
 
@@ -48,3 +50,29 @@ def test_baixar_xml_prestados_via_menu_faz_fallback_para_clique(monkeypatch):
     assert origem == "menu_click"
     assert clicks == [menu, action]
     assert waits["timeout"] == 60
+
+
+def test_processar_download_xml_prestados_nao_chama_modal_automaticamente(monkeypatch):
+    fechamento = []
+    modal_calls = []
+
+    monkeypatch.setattr(main, "chaves_ok", set())
+    monkeypatch.setattr(main, "nota_cancelada", lambda *_: False)
+    monkeypatch.setattr(main, "chave_unica", lambda info: f"{info.get('nf', 'NF')}")
+    monkeypatch.setattr(
+        main,
+        "_baixar_xml_prestados_via_menu_exportar",
+        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("menu falhou")),
+    )
+    monkeypatch.setattr(
+        main,
+        "_baixar_xml_prestados_via_modal_legado",
+        lambda *args, **kwargs: modal_calls.append(True) or "C:/tmp/modal.xml",
+    )
+    monkeypatch.setattr(main, "fechar_modal_exportacao", lambda: fechamento.append(True))
+
+    with pytest.raises(RuntimeError, match="modal legado nao sera usado"):
+        main._processar_download_xml_prestados(object(), {"nf": "413"}, 0, 1, 0.0)
+
+    assert fechamento == [True]
+    assert modal_calls == []
