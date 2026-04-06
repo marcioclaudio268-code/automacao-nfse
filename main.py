@@ -283,6 +283,7 @@ LOGIN_URL_PREFEITURA = os.environ.get(
 ).strip()
 LOGIN_CAMPO_USUARIO = os.environ.get("LOGIN_CAMPO_USUARIO", "usuario").strip()
 LOGIN_CAMPO_SENHA = os.environ.get("LOGIN_CAMPO_SENHA", "senha").strip()
+LOGIN_CAMPO_CAPTCHA = os.environ.get("LOGIN_CAMPO_CAPTCHA", "imagem").strip()
 LOGIN_BOTAO_ENTRAR = os.environ.get("LOGIN_BOTAO_ENTRAR", "btnEntrar").strip()
 LOGIN_CARD_DASHBOARD = os.environ.get("LOGIN_CARD_DASHBOARD", "divtxtnotafiscal").strip()
 LOGIN_CARD_LISTA_NOTAS = os.environ.get("LOGIN_CARD_LISTA_NOTAS", "divtxtlistanf").strip()
@@ -478,6 +479,58 @@ def pausa_login_captcha_manual(contexto: str):
         append_txt(log_manual, auto_msg)
     except Exception:
         pass
+
+
+def posicionar_campo_captcha_manual(timeout: int = 5) -> bool:
+    """Tenta trazer o campo do captcha para a tela e dar foco, sem digitar nada."""
+    if driver is None:
+        print("[MANUAL-LOGIN] Foco no captcha indisponivel: driver nao inicializado.")
+        return False
+
+    if not LOGIN_CAMPO_CAPTCHA:
+        print("[MANUAL-LOGIN] Campo do captcha nao configurado; mantendo o fluxo atual.")
+        return False
+
+    try:
+        campo_captcha = WebDriverWait(driver, max(1, int(timeout))).until(
+            EC.presence_of_element_located((By.NAME, LOGIN_CAMPO_CAPTCHA))
+        )
+    except Exception as exc:
+        print(
+            "[MANUAL-LOGIN] Campo do captcha nao localizado para foco automatico; "
+            f"mantendo fluxo atual. ({type(exc).__name__}: {exc})"
+        )
+        return False
+
+    try:
+        driver.execute_script("arguments[0].scrollIntoView({block:'center', inline:'nearest'});", campo_captcha)
+    except Exception:
+        pass
+
+    try:
+        WebDriverWait(driver, 3).until(lambda d: campo_captcha.is_displayed() and campo_captcha.is_enabled())
+    except Exception:
+        pass
+
+    try:
+        campo_captcha.click()
+    except Exception:
+        try:
+            driver.execute_script("arguments[0].focus();", campo_captcha)
+        except Exception as exc:
+            print(
+                "[MANUAL-LOGIN] Foco automatizado no captcha indisponivel; "
+                f"mantendo fluxo atual. ({type(exc).__name__}: {exc})"
+            )
+            return False
+
+    try:
+        driver.execute_script("arguments[0].focus();", campo_captcha)
+    except Exception:
+        pass
+
+    print("[MANUAL-LOGIN] Campo do captcha pronto para digitacao.")
+    return True
 
 
 def encontrar_tr_por_referencia_grid(ref_alvo: str, col_ref: str) -> object:
@@ -1103,8 +1156,9 @@ def preencher_login_prefeitura_se_habilitado():
 
     wait.until(EC.element_to_be_clickable((By.ID, LOGIN_BOTAO_ENTRAR)))
 
-    contexto_login = "LOGIN_CAPTCHA | Resolva o captcha e clique em 'Entrar'. A automacao seguira sozinha."
-    print("CNPJ e senha preenchidos. Login manual formal aguardando captcha.")
+    posicionar_campo_captcha_manual()
+    contexto_login = "LOGIN_CAPTCHA | Aguardando digitacao do captcha. Resolva o captcha e clique em 'Entrar'. A automacao seguira sozinha."
+    print("CNPJ e senha preenchidos. Aguardando digitacao do captcha.")
     pausa_login_captcha_manual(contexto_login)
     print(f"Aguardando dashboard por até {login_wait_seconds}s após a liberação manual...")
 

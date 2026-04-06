@@ -304,4 +304,9 @@ python orquestrador_empresas.py
 ```
 
 
+## Login manual
+
+Ao chegar na etapa manual do login, o sistema tenta posicionar o foco no campo do captcha e deixa a continuacao manual igual ao fluxo atual.
+
+
 
