@@ -1,5 +1,3 @@
-import pytest
-
 import main
 
 
@@ -52,9 +50,9 @@ def test_baixar_xml_prestados_via_menu_faz_fallback_para_clique(monkeypatch):
     assert waits["timeout"] == 60
 
 
-def test_processar_download_xml_prestados_nao_chama_modal_automaticamente(monkeypatch):
-    fechamento = []
+def test_processar_download_xml_prestados_usa_modal_legado_quando_menu_falha(monkeypatch):
     modal_calls = []
+    xml_organizados = []
 
     monkeypatch.setattr(main, "chaves_ok", set())
     monkeypatch.setattr(main, "nota_cancelada", lambda *_: False)
@@ -67,12 +65,19 @@ def test_processar_download_xml_prestados_nao_chama_modal_automaticamente(monkey
     monkeypatch.setattr(
         main,
         "_baixar_xml_prestados_via_modal_legado",
-        lambda *args, **kwargs: modal_calls.append(True) or "C:/tmp/modal.xml",
+        lambda *args, **kwargs: modal_calls.append(True) or ("C:/tmp/modal.xml", "modal_click"),
     )
-    monkeypatch.setattr(main, "fechar_modal_exportacao", lambda: fechamento.append(True))
+    monkeypatch.setattr(
+        main,
+        "organizar_xml_por_pasta",
+        lambda xml_baixado, info: xml_organizados.append(xml_baixado) or "C:/tmp/final.xml",
+    )
+    monkeypatch.setattr(main, "salvar_log", lambda *args, **kwargs: "C:/tmp/log.csv")
+    monkeypatch.setattr(main, "fechar_modal_exportacao", lambda: None)
+    monkeypatch.setattr(main, "perf_log", lambda *args, **kwargs: None)
 
-    with pytest.raises(RuntimeError, match="modal legado nao sera usado"):
-        main._processar_download_xml_prestados(object(), {"nf": "413"}, 0, 1, 0.0)
+    result = main._processar_download_xml_prestados(object(), {"nf": "413"}, 0, 1, 0.0)
 
-    assert fechamento == [True]
-    assert modal_calls == []
+    assert result == "OK"
+    assert modal_calls == [True]
+    assert xml_organizados == ["C:/tmp/modal.xml"]

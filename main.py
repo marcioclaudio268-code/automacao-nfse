@@ -7291,16 +7291,10 @@ def _processar_download_xml_prestados(checkbox, info: dict, i: int, tentativa: i
         xml_baixado, origem_download = _baixar_xml_prestados_via_menu_exportar(info, i)
     except Exception as erro_menu:
         print(
-            f"[{i+1}] Aviso: fluxo XML Nacional direto falhou. "
-            f"Modal legado fechado e tratado como erro. {type(erro_menu).__name__}: {str(erro_menu)[:180]}"
+            f"[{i+1}] Aviso: fluxo via menu XML Nacional falhou, aplicando fallback legado. "
+            f"{type(erro_menu).__name__}: {str(erro_menu)[:180]}"
         )
-        try:
-            fechar_modal_exportacao()
-        except Exception:
-            pass
-        raise RuntimeError(
-            "Fluxo XML Nacional direto falhou e o modal legado nao sera usado como fallback automatico."
-        ) from erro_menu
+        xml_baixado, origem_download = _baixar_xml_prestados_via_modal_legado(info, i)
 
     destino_final = organizar_xml_por_pasta(xml_baixado, info)
     logp = salvar_log(
