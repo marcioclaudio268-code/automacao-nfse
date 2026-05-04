@@ -5582,10 +5582,14 @@ def encontrar_icone_guia_por_referencia(ref_alvo: str, col_ref: str = ""):
             try:
                 if el.is_displayed():
                     return el
+            except StaleElementReferenceException:
+                raise
             except Exception:
                 continue
         if candidatos:
             return candidatos[0]
+    except StaleElementReferenceException:
+        raise
     except Exception:
         pass
 
@@ -5602,10 +5606,14 @@ def encontrar_icone_guia_por_referencia(ref_alvo: str, col_ref: str = ""):
                     try:
                         if el.is_displayed():
                             return el
+                    except StaleElementReferenceException:
+                        raise
                     except Exception:
                         continue
                 if candidatos:
                     return candidatos[0]
+    except StaleElementReferenceException:
+        raise
     except Exception:
         pass
 
@@ -5623,10 +5631,14 @@ def encontrar_icone_guia_por_referencia(ref_alvo: str, col_ref: str = ""):
             try:
                 if el.is_displayed():
                     return el
+            except StaleElementReferenceException:
+                raise
             except Exception:
                 continue
         if candidatos:
             return candidatos[0]
+    except StaleElementReferenceException:
+        raise
     except Exception:
         pass
 
@@ -6394,6 +6406,78 @@ def salvar_pdf_guia(pdf_tmp_path: str, modulo_up: str, ano_alvo: int, mes_alvo: 
     return destino_final
 
 
+GUIA_ISS_MAX_TENTATIVAS = 3
+GUIA_ISS_RETRY_DELAYS_SECONDS = (0.8, 1.6, 2.4)
+
+
+def _preparar_tentativa_guia_iss(handles_base=None) -> None:
+    try:
+        driver.switch_to.default_content()
+    except Exception:
+        pass
+    try:
+        if handles_base:
+            fechar_janelas_extras(handles_base)
+    except Exception:
+        pass
+    try:
+        fechar_modal_livro_se_aberto(timeout=3)
+    except Exception:
+        pass
+    try:
+        driver.switch_to.default_content()
+    except Exception:
+        pass
+
+
+def executar_guia_iss_com_retry_stale(
+    operacao,
+    modulo_up: str,
+    ref_alvo: str,
+    log_manual: str,
+    handles_base=None,
+    max_tentativas: int = GUIA_ISS_MAX_TENTATIVAS,
+) -> str:
+    max_tentativas = max(1, int(max_tentativas or 1))
+    ultimo_erro = None
+
+    for tentativa in range(1, max_tentativas + 1):
+        append_txt(log_manual, f"{modulo_up} | {ref_alvo} | GUIA_ISS=TENTATIVA | tentativa {tentativa}/{max_tentativas}")
+        _preparar_tentativa_guia_iss(handles_base)
+        try:
+            return operacao()
+        except StaleElementReferenceException as e:
+            ultimo_erro = e
+            append_txt(log_manual, f"{modulo_up} | {ref_alvo} | GUIA_ISS=STALE | tentativa {tentativa}/{max_tentativas}")
+            if tentativa >= max_tentativas:
+                append_txt(
+                    log_manual,
+                    f"{modulo_up} | {ref_alvo} | GUIA_ISS=ERRO_FINAL | {type(e).__name__}: {str(e)[:180]}",
+                )
+                return "ERRO"
+            delay = GUIA_ISS_RETRY_DELAYS_SECONDS[min(tentativa - 1, len(GUIA_ISS_RETRY_DELAYS_SECONDS) - 1)]
+            sleep(delay)
+        except TimeoutError as e:
+            append_txt(log_manual, f"{modulo_up} | {ref_alvo} | GUIA_ISS=TIMEOUT_DOWNLOAD | {str(e)[:180]}")
+            append_txt(
+                log_manual,
+                f"{modulo_up} | {ref_alvo} | GUIA_ISS=ERRO_FINAL | {type(e).__name__}: {str(e)[:180]}",
+            )
+            return "ERRO"
+        except Exception as e:
+            append_txt(
+                log_manual,
+                f"{modulo_up} | {ref_alvo} | GUIA_ISS=ERRO_FINAL | {type(e).__name__}: {str(e)[:180]}",
+            )
+            return "ERRO"
+
+    append_txt(
+        log_manual,
+        f"{modulo_up} | {ref_alvo} | GUIA_ISS=ERRO_FINAL | {type(ultimo_erro).__name__}: {str(ultimo_erro)[:180]}",
+    )
+    return "ERRO"
+
+
 def baixar_guia_iss_se_existir(modulo_up: str, ref_alvo: str, col_ref: str, ano_alvo: int, mes_alvo: int) -> str:
     """Se existir ícone de guia ISS na linha da referência, abre modal e baixa o PDF."""
     log_manual = caminho_log_manual(ref_alvo, ano_alvo, mes_alvo)
@@ -6401,6 +6485,32 @@ def baixar_guia_iss_se_existir(modulo_up: str, ref_alvo: str, col_ref: str, ano_
     try:
         driver.switch_to.default_content()
         handles_base = list(driver.window_handles)
+    except Exception:
+        pass
+
+    return executar_guia_iss_com_retry_stale(
+        lambda: _baixar_guia_iss_tentativa(modulo_up, ref_alvo, col_ref, ano_alvo, mes_alvo, log_manual, handles_base),
+        modulo_up,
+        ref_alvo,
+        log_manual,
+        handles_base=handles_base,
+    )
+
+
+def _baixar_guia_iss_tentativa(
+    modulo_up: str,
+    ref_alvo: str,
+    col_ref: str,
+    ano_alvo: int,
+    mes_alvo: int,
+    log_manual: str,
+    handles_base=None,
+) -> str:
+    handles_base = list(handles_base or [])
+    try:
+        driver.switch_to.default_content()
+        if not handles_base:
+            handles_base = list(driver.window_handles)
         icone_guia = encontrar_icone_guia_por_referencia(ref_alvo, col_ref)
         if icone_guia is None:
             qtd_print_total = 0
@@ -6476,6 +6586,8 @@ def baixar_guia_iss_se_existir(modulo_up: str, ref_alvo: str, col_ref: str, ano_
                 debug_ref_alvo=ref_alvo,
             )
             append_txt(log_manual, f"{modulo_up} | {ref_alvo} | GUIA_PDF_FETCH=OK | via submit_form")
+        except StaleElementReferenceException:
+            raise
         except Exception as exc_submit:
             append_txt(
                 log_manual,
@@ -6487,6 +6599,8 @@ def baixar_guia_iss_se_existir(modulo_up: str, ref_alvo: str, col_ref: str, ano_
                 modal = esperar_controles_guia(timeout=5)
                 visualizar_btn = modal["visualizar"]
                 driver.execute_script("arguments[0].scrollIntoView({block:'center'});", visualizar_btn)
+            except StaleElementReferenceException:
+                raise
             except Exception:
                 pass
             try:
@@ -6503,6 +6617,8 @@ def baixar_guia_iss_se_existir(modulo_up: str, ref_alvo: str, col_ref: str, ano_
                 if pdf_url:
                     append_txt(log_manual, f"{modulo_up} | {ref_alvo} | GUIA_PDF_POPUP_URL=OK | {pdf_url}")
                 append_txt(log_manual, f"{modulo_up} | {ref_alvo} | GUIA_PDF_FETCH=OK | via {origem_popup}")
+            except StaleElementReferenceException:
+                raise
             except Exception as exc_popup:
                 append_txt(log_manual, f"{modulo_up} | {ref_alvo} | GUIA_PDF_POPUP_FAIL | {type(exc_popup).__name__}: {str(exc_popup)[:140]}")
 
@@ -6555,10 +6671,8 @@ def baixar_guia_iss_se_existir(modulo_up: str, ref_alvo: str, col_ref: str, ano_
             log_manual,
             f"{modulo_up} | {ref_alvo} | GUIA_PDF=OK | ARQ={os.path.basename(destino_pdf)} | PASTA={os.path.dirname(destino_pdf)}"
         )
+        append_txt(log_manual, f"{modulo_up} | {ref_alvo} | GUIA_ISS=OK | ARQ={os.path.basename(destino_pdf)}")
         return "OK"
-    except Exception as e:
-        append_txt(log_manual, f"{modulo_up} | {ref_alvo} | GUIA_ISS=ERRO | {type(e).__name__}: {str(e)[:180]}")
-        return "ERRO"
     finally:
         try:
             if handles_base:
