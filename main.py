@@ -97,6 +97,8 @@ ENABLE_CHROME_PERFORMANCE_LOGS = _env_flag(
     EXECUTAR_TOMADOS or EXECUTAR_LIVROS or EXECUTAR_ISS,
 )
 PERF_TIMING_LOGS = _env_flag("PERF_TIMING_LOGS", False)
+CAPTURAR_PRINTS_PASSOS_ROBO = _env_flag("CAPTURAR_PRINTS_PASSOS_ROBO", False)
+_PRINT_PASSO_ROBO_SEQ = 0
 
 
 
@@ -4497,6 +4499,53 @@ def caminho_log_manual(ref_alvo: str = "", ano_alvo: int = 0, mes_alvo: int = 0)
     return caminho_arquivo_geral("log_fechamento_manual.txt", ano_alvo=ano_alvo, mes_alvo=mes_alvo)
 
 
+def _sanitizar_etapa_print_passo(etapa: str) -> str:
+    texto = unicodedata.normalize("NFKD", str(etapa or "passo"))
+    texto = "".join(ch for ch in texto if not unicodedata.combining(ch))
+    texto = re.sub(r"[^A-Za-z0-9._-]+", "_", texto).strip("._-")
+    return (texto or "passo")[:90]
+
+
+def capturar_print_passo_robo(modulo: str, etapa: str, ano_alvo: int = 0, mes_alvo: int = 0, ref_alvo: str = "", log_path: str = "") -> str:
+    if not CAPTURAR_PRINTS_PASSOS_ROBO:
+        return ""
+
+    modulo_up = (modulo or "").strip().upper()
+    if modulo_up not in {"PRESTADOS", "TOMADOS"}:
+        return ""
+
+    log_destino = log_path or caminho_log_manual(ref_alvo, ano_alvo, mes_alvo)
+    try:
+        pasta_modulo = pasta_servico(modulo_up, ano_alvo=ano_alvo, mes_alvo=mes_alvo)
+        pasta_prints = os.path.join(pasta_modulo, "_prints_robo")
+        os.makedirs(pasta_prints, exist_ok=True)
+
+        global _PRINT_PASSO_ROBO_SEQ
+        _PRINT_PASSO_ROBO_SEQ += 1
+        nome_etapa = _sanitizar_etapa_print_passo(etapa)
+        ts_arquivo = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        nome_arquivo = f"{_PRINT_PASSO_ROBO_SEQ:04d}_{modulo_up}_{nome_etapa}_{ts_arquivo}.png"
+        destino = os.path.join(pasta_prints, nome_arquivo)
+
+        if not driver.save_screenshot(destino):
+            raise RuntimeError("save_screenshot retornou False")
+
+        append_txt(
+            log_destino,
+            f"PRINT_PASSO=OK | MODULO={modulo_up} | ETAPA={etapa} | ARQ={nome_arquivo} | PASTA={pasta_prints}",
+        )
+        return destino
+    except Exception as exc:
+        try:
+            append_txt(
+                log_destino,
+                f"PRINT_PASSO=ERRO | MODULO={modulo_up} | ETAPA={etapa} | ERRO={type(exc).__name__}: {str(exc)[:180]}",
+            )
+        except Exception:
+            pass
+        return ""
+
+
 def caminho_log_apuracao_completa(ref_alvo: str = "", ano_alvo: int = 0, mes_alvo: int = 0) -> str:
     if ref_alvo and not (ano_alvo and mes_alvo):
         ano_alvo, mes_alvo = parse_referencia_competencia(ref_alvo)
@@ -6727,9 +6776,11 @@ def executar_etapa_servicos_tomados(ano_alvo: int, mes_alvo: int) -> str:
         WebDriverWait(driver, 50).until(
             EC.presence_of_element_located((By.ID, "_gridTable"))
         )
+        capturar_print_passo_robo("TOMADOS", "abriu_lista_tomados", ano_alvo, mes_alvo, ref_alvo, log_manual)
 
         # Se a grid estiver vazia (NENHUM REGISTRO...), já encerramos como sucesso sem tomados.
         if tomados_grid_sem_registros(timeout=25):
+            capturar_print_passo_robo("TOMADOS", "sem_registros_tomados", ano_alvo, mes_alvo, ref_alvo, log_manual)
             salvar_print_evidencia(
                 "SERVICOS_TOMADOS",
                 "SEM_IDENTIFICACAO_OU_SEM_COMPETENCIA",
@@ -6743,6 +6794,7 @@ def executar_etapa_servicos_tomados(ano_alvo: int, mes_alvo: int) -> str:
             return "SUCESSO_SEM_TOMADOS"
 
         # Agora que sabemos que há linhas, mapeamos a coluna "Referência"
+        capturar_print_passo_robo("TOMADOS", "antes_filtro_competencia", ano_alvo, mes_alvo, ref_alvo, log_manual)
         col_ref = esperar_grid_declaracao_fiscal(timeout=50)
 
         garantir_contexto_referencia_grid(
@@ -6752,9 +6804,11 @@ def executar_etapa_servicos_tomados(ano_alvo: int, mes_alvo: int) -> str:
             log_path=log_manual,
             modulo="TOMADOS",
         )
+        capturar_print_passo_robo("TOMADOS", "apos_filtro_competencia", ano_alvo, mes_alvo, ref_alvo, log_manual)
 
         btn_laranja = encontrar_botao_laranja_por_referencia(ref_alvo, col_ref=col_ref)
         if not btn_laranja:
+            capturar_print_passo_robo("TOMADOS", "competencia_nao_encontrada", ano_alvo, mes_alvo, ref_alvo, log_manual)
             salvar_print_evidencia(
                 "SERVICOS_TOMADOS",
                 "COMPETENCIA_NAO_ENCONTRADA",
@@ -6767,6 +6821,7 @@ def executar_etapa_servicos_tomados(ano_alvo: int, mes_alvo: int) -> str:
             print(f"[TOMADOS] Referência {ref_alvo} não encontrada. SUCESSO_SEM_TOMADOS.")
             return "SUCESSO_SEM_TOMADOS"
 
+        capturar_print_passo_robo("TOMADOS", "competencia_alvo_localizada", ano_alvo, mes_alvo, ref_alvo, log_manual)
         click_robusto(btn_laranja)
         fechar_alerta_mensagens_prefeitura_se_aberto(timeout=5, log_path=log_manual, modulo="TOMADOS", ref_alvo=ref_alvo)
 
@@ -6815,6 +6870,7 @@ def executar_etapa_servicos_tomados(ano_alvo: int, mes_alvo: int) -> str:
         xmls_antes = [a for a in os.listdir(TEMP_DOWNLOAD_DIR) if a.lower().endswith(".xml")]
 
         # Marcar todos e validar
+        capturar_print_passo_robo("TOMADOS", "antes_exportar_xml", ano_alvo, mes_alvo, ref_alvo, log_manual)
         if not chk_all.is_selected():
             click_robusto(chk_all)
         WebDriverWait(driver, 20).until(lambda d: chk_all.is_selected())
@@ -6844,16 +6900,20 @@ def executar_etapa_servicos_tomados(ano_alvo: int, mes_alvo: int) -> str:
             xml_baixado = aguardar_xml_novo(TEMP_DOWNLOAD_DIR, timeout=120, xmls_antes=xmls_antes)
 
         destino_final = salvar_xml_tomados(xml_baixado, ano_alvo, mes_alvo)
+        capturar_print_passo_robo("TOMADOS", "xml_confirmado", ano_alvo, mes_alvo, ref_alvo, log_manual)
 
         salvar_log_tomados("OK", ref_alvo, arquivo_xml=destino_final, mensagem="XML de Serviços Tomados baixado e organizado")
         print(f"[TOMADOS] OK -> {destino_final}")
 
+        capturar_print_passo_robo("TOMADOS", "antes_download_pdfs_tomados", ano_alvo, mes_alvo, ref_alvo, log_manual)
         total_pdfs = baixar_pdfs_servicos_tomados(ano_alvo, mes_alvo, ref_alvo)
+        capturar_print_passo_robo("TOMADOS", "apos_download_pdfs_tomados", ano_alvo, mes_alvo, ref_alvo, log_manual)
         limpar_status_tomados_pdf(referencia=ref_alvo)
         print(f"[TOMADOS] PDFs OK -> {total_pdfs}")
         return "OK"
 
     except Exception as e:
+        capturar_print_passo_robo("TOMADOS", "erro_tecnico_modulo", ano_alvo, mes_alvo, ref_alvo, log_manual)
         msg = str(e)
         try:
             salvar_log_tomados("ERRO", ref_alvo, mensagem=msg[:200])
@@ -7067,9 +7127,11 @@ def executar_cadeado_tomados(ano_alvo: int, mes_alvo: int) -> str:
         abrir_servicos_tomados(timeout=40)
         fechar_alerta_mensagens_prefeitura_se_aberto(timeout=5, log_path=log_manual, modulo="TOMADOS", ref_alvo=ref_alvo)
         WebDriverWait(driver, 50).until(EC.presence_of_element_located((By.XPATH, "//*[contains(@id,'gridTable')]")))
+        capturar_print_passo_robo("TOMADOS", "abriu_modulo_cadeado", ano_alvo, mes_alvo, ref_alvo, log_manual)
 
         # Se não houver linhas, não há o que fechar
         if tomados_grid_sem_registros(timeout=25):
+            capturar_print_passo_robo("TOMADOS", "sem_registros_cadeado", ano_alvo, mes_alvo, ref_alvo, log_manual)
             salvar_print_evidencia(
                 "SERVICOS_TOMADOS",
                 "SEM_IDENTIFICACAO_OU_SEM_COMPETENCIA",
@@ -7084,6 +7146,7 @@ def executar_cadeado_tomados(ano_alvo: int, mes_alvo: int) -> str:
         col_ref = esperar_grid_declaracao_fiscal(timeout=50)
         tr = encontrar_tr_por_referencia_grid(ref_alvo, col_ref)
         if not tr:
+            capturar_print_passo_robo("TOMADOS", "competencia_nao_encontrada_cadeado", ano_alvo, mes_alvo, ref_alvo, log_manual)
             salvar_print_evidencia(
                 "SERVICOS_TOMADOS",
                 "COMPETENCIA_NAO_ENCONTRADA",
@@ -7103,6 +7166,8 @@ def executar_cadeado_tomados(ano_alvo: int, mes_alvo: int) -> str:
             modulo="TOMADOS",
         )
 
+        capturar_print_passo_robo("TOMADOS", "competencia_alvo_localizada_cadeado", ano_alvo, mes_alvo, ref_alvo, log_manual)
+        capturar_print_passo_robo("TOMADOS", "antes_fluxo_livro_cadeado", ano_alvo, mes_alvo, ref_alvo, log_manual)
         clicou = clicar_cadeado_na_linha(ref_alvo, col_ref)
         if clicou:
             append_txt(log_manual, f"TOMADOS | {ref_alvo} | CADEADO=OK")
@@ -7111,11 +7176,14 @@ def executar_cadeado_tomados(ano_alvo: int, mes_alvo: int) -> str:
 
         if EXECUTAR_LIVROS:
             abrir_modal_livro_e_visualizar("TOMADOS", "tomados", ano_alvo, mes_alvo, ref_alvo)
+            capturar_print_passo_robo("TOMADOS", "apos_fluxo_livro_cadeado", ano_alvo, mes_alvo, ref_alvo, log_manual)
         else:
             append_txt(log_manual, f"TOMADOS | {ref_alvo} | LIVRO=SKIP_PERFIL")
 
         if EXECUTAR_ISS:
+            capturar_print_passo_robo("TOMADOS", "antes_guia_iss", ano_alvo, mes_alvo, ref_alvo, log_manual)
             baixar_guia_iss_se_existir("TOMADOS", ref_alvo, col_ref, ano_alvo, mes_alvo)
+            capturar_print_passo_robo("TOMADOS", "apos_guia_iss", ano_alvo, mes_alvo, ref_alvo, log_manual)
         else:
             append_txt(log_manual, f"TOMADOS | {ref_alvo} | GUIA_ISS=SKIP_PERFIL")
 
@@ -7123,6 +7191,7 @@ def executar_cadeado_tomados(ano_alvo: int, mes_alvo: int) -> str:
             pausa_manual(f"TOMADOS {ref_alvo}")
         return "OK"
     except Exception as e:
+        capturar_print_passo_robo("TOMADOS", "erro_tecnico_cadeado_livro_guia", ano_alvo, mes_alvo, ref_alvo, log_manual)
         append_txt(
             log_manual,
             f"TOMADOS | {ref_alvo} | ERRO_CADEADO | {type(e).__name__}: {str(e)[:180]}"
@@ -7175,9 +7244,11 @@ def executar_cadeado_prestados(ano_alvo: int, mes_alvo: int) -> str:
         abrir_servicos_prestados(timeout=40)
         fechar_alerta_mensagens_prefeitura_se_aberto(timeout=5, log_path=log_manual, modulo="PRESTADOS", ref_alvo=ref_alvo)
         WebDriverWait(driver, 50).until(EC.presence_of_element_located((By.XPATH, "//*[contains(@id,'gridTable')]")))
+        capturar_print_passo_robo("PRESTADOS", "abriu_modulo_cadeado", ano_alvo, mes_alvo, ref_alvo, log_manual)
 
         # Reusa detector (funciona igual na prática, mas é tolerante)
         if tomados_grid_sem_registros(timeout=25):
+            capturar_print_passo_robo("PRESTADOS", "sem_registros_cadeado", ano_alvo, mes_alvo, ref_alvo, log_manual)
             salvar_print_evidencia(
                 "DECLARACAO_FISCAL_PRESTADOS",
                 "SEM_COMPETENCIA_PRESTADOS",
@@ -7192,6 +7263,7 @@ def executar_cadeado_prestados(ano_alvo: int, mes_alvo: int) -> str:
         col_ref = esperar_grid_declaracao_fiscal(timeout=50)
         tr = encontrar_tr_por_referencia_grid(ref_alvo, col_ref)
         if not tr:
+            capturar_print_passo_robo("PRESTADOS", "competencia_nao_encontrada_cadeado", ano_alvo, mes_alvo, ref_alvo, log_manual)
             salvar_print_evidencia(
                 "DECLARACAO_FISCAL_PRESTADOS",
                 "COMPETENCIA_NAO_ENCONTRADA_PRESTADOS",
@@ -7211,6 +7283,8 @@ def executar_cadeado_prestados(ano_alvo: int, mes_alvo: int) -> str:
             modulo="PRESTADOS",
         )
 
+        capturar_print_passo_robo("PRESTADOS", "competencia_alvo_localizada_cadeado", ano_alvo, mes_alvo, ref_alvo, log_manual)
+        capturar_print_passo_robo("PRESTADOS", "antes_fluxo_livro_cadeado", ano_alvo, mes_alvo, ref_alvo, log_manual)
         clicou = clicar_cadeado_na_linha(ref_alvo, col_ref)
         if clicou:
             append_txt(log_manual, f"PRESTADOS | {ref_alvo} | CADEADO=OK")
@@ -7219,11 +7293,14 @@ def executar_cadeado_prestados(ano_alvo: int, mes_alvo: int) -> str:
 
         if EXECUTAR_LIVROS:
             abrir_modal_livro_e_visualizar("PRESTADOS", "prestados", ano_alvo, mes_alvo, ref_alvo)
+            capturar_print_passo_robo("PRESTADOS", "apos_fluxo_livro_cadeado", ano_alvo, mes_alvo, ref_alvo, log_manual)
         else:
             append_txt(log_manual, f"PRESTADOS | {ref_alvo} | LIVRO=SKIP_PERFIL")
 
         if EXECUTAR_ISS:
+            capturar_print_passo_robo("PRESTADOS", "antes_guia_iss", ano_alvo, mes_alvo, ref_alvo, log_manual)
             baixar_guia_iss_se_existir("PRESTADOS", ref_alvo, col_ref, ano_alvo, mes_alvo)
+            capturar_print_passo_robo("PRESTADOS", "apos_guia_iss", ano_alvo, mes_alvo, ref_alvo, log_manual)
         else:
             append_txt(log_manual, f"PRESTADOS | {ref_alvo} | GUIA_ISS=SKIP_PERFIL")
 
@@ -7231,6 +7308,7 @@ def executar_cadeado_prestados(ano_alvo: int, mes_alvo: int) -> str:
             pausa_manual(f"PRESTADOS {ref_alvo}")
         return "OK"
     except Exception as e:
+        capturar_print_passo_robo("PRESTADOS", "erro_tecnico_cadeado_livro_guia", ano_alvo, mes_alvo, ref_alvo, log_manual)
         append_txt(
             log_manual,
             f"PRESTADOS | {ref_alvo} | ERRO_CADEADO | {type(e).__name__}: {str(e)[:180]}"
@@ -7434,6 +7512,8 @@ def _processar_download_xml_prestados(checkbox, info: dict, i: int, tentativa: i
 def processar_nota_por_indice(i, ano_alvo, mes_alvo, checkboxes_cache=None):
     global PARAR_PROCESSAMENTO, ENCONTROU_MES_ALVO, CONT_FORA_APOS_ALVO, CONT_FORA_ANTES_ALVO, SEM_COMPETENCIA_NA_EMPRESA
 
+    ref_alvo = f"{mes_alvo:02d}/{ano_alvo}"
+    log_manual = caminho_log_manual(ref_alvo, ano_alvo, mes_alvo)
     tentativa = 0
     while tentativa < MAX_RETRIES_POR_NOTA:
         tentativa += 1
@@ -7505,10 +7585,14 @@ def processar_nota_por_indice(i, ano_alvo, mes_alvo, checkboxes_cache=None):
             CONT_FORA_APOS_ALVO = 0
             CONT_FORA_ANTES_ALVO = 0
 
+            capturar_print_passo_robo("PRESTADOS", "competencia_alvo_localizada", ano_alvo, mes_alvo, ref_alvo, log_manual)
+            capturar_print_passo_robo("PRESTADOS", "antes_exportar_xml", ano_alvo, mes_alvo, ref_alvo, log_manual)
             _processar_download_xml_prestados(checkbox, info, i, tentativa, inicio_perf)
+            capturar_print_passo_robo("PRESTADOS", "xml_confirmado", ano_alvo, mes_alvo, ref_alvo, log_manual)
             return True
 
         except TimeoutException as e:
+            capturar_print_passo_robo("PRESTADOS", "erro_tecnico_xml", ano_alvo, mes_alvo, ref_alvo, log_manual)
             # Timeout geralmente = não abriu modal / não baixou a tempo
             msg = f"Timeout: {str(e)}"
             print(f"Erro nota [{i+1}] tentativa {tentativa}/{MAX_RETRIES_POR_NOTA}: {msg}")
@@ -7526,6 +7610,7 @@ def processar_nota_por_indice(i, ano_alvo, mes_alvo, checkboxes_cache=None):
             perf_log("prestados.nota_timeout", inicio_perf, f"indice={i+1} tentativa={tentativa}")
 
         except (StaleElementReferenceException, WebDriverException) as e:
+            capturar_print_passo_robo("PRESTADOS", "erro_tecnico_xml", ano_alvo, mes_alvo, ref_alvo, log_manual)
             msg = str(e)
             print(f"Erro nota [{i+1}] tentativa {tentativa}/{MAX_RETRIES_POR_NOTA}: {msg}")
 
@@ -7542,9 +7627,11 @@ def processar_nota_por_indice(i, ano_alvo, mes_alvo, checkboxes_cache=None):
             perf_log("prestados.nota_webdriver", inicio_perf, f"indice={i+1} tentativa={tentativa}")
 
         except RuntimeError:
+            capturar_print_passo_robo("PRESTADOS", "erro_tecnico_xml", ano_alvo, mes_alvo, ref_alvo, log_manual)
             raise
 
         except Exception as e:
+            capturar_print_passo_robo("PRESTADOS", "erro_tecnico_xml", ano_alvo, mes_alvo, ref_alvo, log_manual)
             msg = str(e)
             print(f"Erro inesperado nota [{i+1}] tentativa {tentativa}/{MAX_RETRIES_POR_NOTA}: {msg}")
 
@@ -7696,6 +7783,8 @@ def descrever_perfil_execucao() -> str:
 def executar_etapa_servicos_prestados(ano_alvo: int, mes_alvo: int) -> str:
     global PARAR_PROCESSAMENTO, ENCONTROU_MES_ALVO, CONT_FORA_APOS_ALVO, CONT_FORA_ANTES_ALVO, SEM_COMPETENCIA_NA_EMPRESA, PRESTADOS_SEM_MODULO
 
+    ref_alvo = f"{mes_alvo:02d}/{ano_alvo}"
+    log_manual = caminho_log_manual(ref_alvo, ano_alvo, mes_alvo)
     sem_competencia_inicial = False
 
     if PRESTADOS_SEM_MODULO:
@@ -7711,7 +7800,9 @@ def executar_etapa_servicos_prestados(ano_alvo: int, mes_alvo: int) -> str:
     else:
         try:
             status_lista = esperar_lista_ou_sem_checkbox(timeout=20)
+            capturar_print_passo_robo("PRESTADOS", "abriu_lista_prestados", ano_alvo, mes_alvo, ref_alvo, log_manual)
             if status_lista in {"sem_checkbox", "sem_checkbox_com_data"}:
+                capturar_print_passo_robo("PRESTADOS", "competencia_nao_encontrada", ano_alvo, mes_alvo, ref_alvo, log_manual)
                 data_ref = primeira_data_emissao_visivel_sem_checkbox()
                 comp = comparar_competencia_nota({"data_emissao": data_ref}, ano_alvo, mes_alvo) if data_ref else None
 
@@ -7740,6 +7831,7 @@ def executar_etapa_servicos_prestados(ano_alvo: int, mes_alvo: int) -> str:
 
     if (not PRESTADOS_SEM_MODULO) and (not sem_competencia_inicial):
         try:
+            capturar_print_passo_robo("PRESTADOS", "antes_filtro_competencia", ano_alvo, mes_alvo, ref_alvo, log_manual)
             checks0 = obter_checkboxes_lista(timeout=min(WAIT_LISTA_TIMEOUT, 5))
             if checks0:
                 infos = [extrair_info_linha(checks0[0])]
@@ -7748,6 +7840,7 @@ def executar_etapa_servicos_prestados(ano_alvo: int, mes_alvo: int) -> str:
 
                 comps = [comparar_competencia_nota(info, ano_alvo, mes_alvo) for info in infos]
                 if comps and all(c == -1 for c in comps):
+                    capturar_print_passo_robo("PRESTADOS", "competencia_nao_encontrada", ano_alvo, mes_alvo, ref_alvo, log_manual)
                     SEM_COMPETENCIA_NA_EMPRESA = True
                     PARAR_PROCESSAMENTO = True
                     datas = ", ".join([info.get("data_emissao", "") for info in infos])
@@ -7760,6 +7853,7 @@ def executar_etapa_servicos_prestados(ano_alvo: int, mes_alvo: int) -> str:
 
     if (not PRESTADOS_SEM_MODULO) and (not sem_competencia_inicial) and (not PARAR_PROCESSAMENTO) and len(obter_checkboxes_lista(timeout=min(WAIT_LISTA_TIMEOUT, 5))) > 0:
         definir_page_size(100)
+        capturar_print_passo_robo("PRESTADOS", "apos_filtro_competencia", ano_alvo, mes_alvo, ref_alvo, log_manual)
     else:
         print("Page size não ajustado (lista sem checkbox ou sem notas na gridLista).")
 
@@ -7779,6 +7873,7 @@ def executar_etapa_servicos_prestados(ano_alvo: int, mes_alvo: int) -> str:
 
         if total == 0 and not ENCONTROU_MES_ALVO:
             SEM_COMPETENCIA_NA_EMPRESA = True
+            capturar_print_passo_robo("PRESTADOS", "competencia_nao_encontrada", ano_alvo, mes_alvo, ref_alvo, log_manual)
             print("Lista carregada sem checkboxes; encerrando empresa como sem competência.")
             return "SUCESSO_SEM_COMPETENCIA"
 
